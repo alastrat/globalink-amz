@@ -1,0 +1,31 @@
+services:
+  fba-agent:
+    build: .
+    container_name: fba-agent
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    restart: unless-stopped
+    depends_on:
+      - openclaw
+
+  openclaw:
+    image: ghcr.io/open-claw/openclaw:latest
+    container_name: openclaw-gateway
+    ports:
+      - "18789:18789"
+    environment:
+      - AI_PROVIDER=custom
+      - AI_CUSTOM_URL=http://fba-agent:8000/v1/chat/completions
+      - AI_CUSTOM_MODEL=fba-agent
+    volumes:
+      - ./gateway/openclaw-config.json:/app/config.json
+      - openclaw-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  openclaw-data:
