@@ -1,9 +1,8 @@
 FROM node:22-slim
 
-RUN apt-get update && apt-get install -y git --no-install-recommends && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git ca-certificates --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
-# Force git to use HTTPS instead of SSH for GitHub (no SSH keys needed)
-ENV GIT_SSH_COMMAND="echo"
+# Force git to use HTTPS instead of SSH for GitHub
 RUN git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
     git config --global url."https://github.com/".insteadOf "git@github.com:" && \
     git config --global url."https://github.com".insteadOf "ssh://git@github.com"
