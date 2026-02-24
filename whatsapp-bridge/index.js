@@ -10,6 +10,7 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   makeCacheableSignalKeyStore,
+  fetchLatestBaileysVersion,
   DisconnectReason,
   Browsers,
 } = require("@whiskeysockets/baileys");
@@ -37,12 +38,15 @@ const lidToPhone = {};
 // --- WhatsApp Connection ---
 async function connectWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+  const { version } = await fetchLatestBaileysVersion();
+  console.log("[bridge] Using WA version:", version);
 
   sock = makeWASocket({
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
+    version,
     printQRInTerminal: false,
     logger,
     browser: Browsers.macOS("Chrome"),
