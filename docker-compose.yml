@@ -23,6 +23,7 @@ services:
       - OWNER_WHATSAPP_NUMBER=${OWNER_WHATSAPP_NUMBER}
       - ALLOWED_NUMBERS=${OWNER_WHATSAPP_NUMBER}
       - BRIDGE_PORT=3001
+      - AUTH_DIR=/data/whatsapp-auth
     volumes:
       - whatsapp-auth:/data/whatsapp-auth
     restart: unless-stopped
