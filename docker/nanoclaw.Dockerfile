@@ -2,7 +2,7 @@
 FROM node:22-slim AS builder
 
 RUN apt-get update && \
-    apt-get install -y git --no-install-recommends && \
+    apt-get install -y git ca-certificates --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/nanoclaw
