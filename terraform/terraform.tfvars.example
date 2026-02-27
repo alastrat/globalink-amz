@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars and fill in values
+
+do_token              = "dop_v1_xxxx"
+deploy_ssh_public_key = "ssh-ed25519 AAAA... github-actions"
+allowed_ssh_ips       = ["your.ip.here/32"]
+alert_email           = "you@example.com"
