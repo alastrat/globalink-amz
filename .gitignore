@@ -1,10 +1,38 @@
-.worktrees/
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment (secrets)
+.env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
 *.pyc
-.env
+
+# OS
+.DS_Store
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+
+# Docker
+*.tar
+
+# IDE
+.vscode/
+.idea/
+
+# NanoClaw runtime (not in repo)
+store/
 *.db
-.venv/
-dist/
-*.egg-info/
-.pytest_cache/
-node_modules/
+
+# Worktrees
+.worktrees/
