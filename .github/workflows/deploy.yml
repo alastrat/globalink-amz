@@ -53,7 +53,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to VPS
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync files to VPS
+        run: |
+          SCP="scp -i ~/.ssh/deploy_key"
+          HOST="root@${{ secrets.VPS_HOST }}"
+
+          # Sync docker-compose.yml to deploy directory
+          $SCP docker-compose.yml ${HOST}:/opt/globalink-fba/
+
+          # Sync business config (CLAUDE.md) to NanoClaw groups
+          $SCP config/CLAUDE.md ${HOST}:/opt/nanoclaw/groups/owner/CLAUDE.md
+
+          # Sync Python tools (skip .env which has secrets)
+          $SCP tools/*.py ${HOST}:/opt/nanoclaw/groups/owner/tools/
+
+          # Sync Inngest worker source
+          $SCP inngest/worker/lib/*.js ${HOST}:/opt/inngest/worker/lib/ 2>/dev/null || true
+          $SCP inngest/worker/functions/*.js ${HOST}:/opt/inngest/worker/functions/ 2>/dev/null || true
+
+      - name: Deploy containers
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -62,8 +87,27 @@ jobs:
           script: |
             set -e
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Stop legacy services (systemd → Docker transition)
+            systemctl stop nanoclaw.service 2>/dev/null || true
+            systemctl disable nanoclaw.service 2>/dev/null || true
+            cd /opt/inngest && docker compose down 2>/dev/null || true
+            systemctl stop inngest.service 2>/dev/null || true
+            systemctl disable inngest.service 2>/dev/null || true
+
+            # Deploy unified Docker stack
             cd /opt/globalink-fba
             docker compose pull nanoclaw inngest-worker
             docker compose up -d --remove-orphans
             docker image prune -f
-            echo "Deploy complete: ${{ github.sha }}"
+
+            # Verify containers are running
+            sleep 5
+            RUNNING=$(docker compose ps --format json | grep -c '"running"' || true)
+            if [ "$RUNNING" -lt 3 ]; then
+              echo "WARNING: Only $RUNNING/3 containers running"
+              docker compose ps
+              docker compose logs --tail=20
+              exit 1
+            fi
+            echo "Deploy complete: ${{ github.sha }} ($RUNNING containers running)"

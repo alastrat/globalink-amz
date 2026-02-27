@@ -1,5 +1,7 @@
 # docker-compose.yml
 # Full stack: NanoClaw + Inngest (server + worker)
+# Deploy: runs on VPS at /opt/globalink-fba/
+# Bind-mounts existing VPS paths for WhatsApp auth, groups, and IPC data.
 # Run: docker compose up -d
 
 services:
@@ -12,10 +14,9 @@ services:
     env_file: .env.nanoclaw
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - nanoclaw-store:/opt/nanoclaw/store
-      - nanoclaw-data:/opt/nanoclaw/data
-      - ./config:/opt/nanoclaw/groups/owner:ro
-      - ./tools:/opt/nanoclaw/groups/owner/tools:ro
+      - /opt/nanoclaw/store:/opt/nanoclaw/store
+      - /opt/nanoclaw/data:/opt/nanoclaw/data
+      - /opt/nanoclaw/groups:/opt/nanoclaw/groups
     networks:
       - inngest
     depends_on:
@@ -51,18 +52,15 @@ services:
       - CACHE_DIR=/cache
       - CHAT_JID=${CHAT_JID:-573002061607@s.whatsapp.net}
     volumes:
-      - ./tools:/tools:ro
-      - nanoclaw-data:/opt/nanoclaw/data
-      - nanoclaw-cache:/cache
+      - /opt/nanoclaw/groups/owner/tools:/tools:ro
+      - /opt/nanoclaw/data:/opt/nanoclaw/data
+      - /opt/nanoclaw/groups/owner/cache:/cache
     depends_on:
       - inngest-server
     networks:
       - inngest
 
 volumes:
-  nanoclaw-store:
-  nanoclaw-data:
-  nanoclaw-cache:
   inngest-data:
 
 networks:
