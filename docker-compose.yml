@@ -1,0 +1,69 @@
+# docker-compose.yml
+# Full stack: NanoClaw + Inngest (server + worker)
+# Run: docker compose up -d
+
+services:
+  nanoclaw:
+    image: ghcr.io/alastrat/globalink-amz/nanoclaw:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/nanoclaw.Dockerfile
+    restart: always
+    env_file: .env.nanoclaw
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - nanoclaw-store:/opt/nanoclaw/store
+      - nanoclaw-data:/opt/nanoclaw/data
+      - ./config:/opt/nanoclaw/groups/owner:ro
+      - ./tools:/opt/nanoclaw/groups/owner/tools:ro
+    networks:
+      - inngest
+    depends_on:
+      - inngest-server
+
+  inngest-server:
+    image: inngest/inngest:latest
+    restart: always
+    ports:
+      - "127.0.0.1:8288:8288"
+    environment:
+      - INNGEST_EVENT_KEY=${INNGEST_EVENT_KEY:-local-fba-event-key}
+      - INNGEST_SIGNING_KEY=${INNGEST_SIGNING_KEY:-signkey-test-12345678}
+    volumes:
+      - inngest-data:/var/lib/inngest
+    command: inngest dev -u http://inngest-worker:3500/api/inngest --no-discovery
+    networks:
+      - inngest
+
+  inngest-worker:
+    image: ghcr.io/alastrat/globalink-amz/inngest-worker:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/inngest-worker.Dockerfile
+    restart: always
+    environment:
+      - INNGEST_DEV=1
+      - INNGEST_BASE_URL=http://inngest-server:8288
+      - INNGEST_EVENT_KEY=${INNGEST_EVENT_KEY:-local-fba-event-key}
+      - INNGEST_SIGNING_KEY=${INNGEST_SIGNING_KEY:-signkey-test-12345678}
+      - TOOLS_DIR=/tools
+      - IPC_DIR=/ipc/messages
+      - CACHE_DIR=/cache
+      - CHAT_JID=${CHAT_JID:-573002061607@s.whatsapp.net}
+    volumes:
+      - ./tools:/tools:ro
+      - nanoclaw-data:/opt/nanoclaw/data
+      - nanoclaw-cache:/cache
+    depends_on:
+      - inngest-server
+    networks:
+      - inngest
+
+volumes:
+  nanoclaw-store:
+  nanoclaw-data:
+  nanoclaw-cache:
+  inngest-data:
+
+networks:
+  inngest:
