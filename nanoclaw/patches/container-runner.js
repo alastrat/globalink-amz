@@ -1,0 +1,565 @@
+/**
+ * Container Runner for NanoClaw
+ * Spawns agent execution in containers and handles IPC
+ */
+import { exec, spawn } from 'child_process';
+import fs from 'fs';
+import http from 'http';
+import path from 'path';
+import { CONTAINER_IMAGE, CONTAINER_MAX_OUTPUT_SIZE, CONTAINER_TIMEOUT, DATA_DIR, GROUPS_DIR, IDLE_TIMEOUT, TIMEZONE, } from './config.js';
+import { readEnvFile } from './env.js';
+import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
+import { logger } from './logger.js';
+import { CONTAINER_RUNTIME_BIN, readonlyMountArgs, stopContainer } from './container-runtime.js';
+import { validateAdditionalMounts } from './mount-security.js';
+// Sentinel markers for robust output parsing (must match agent-runner)
+const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
+const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+function formatFullDetails(product) {
+    const p = product;
+    const lines = [`*Análisis Completo: ${p.title || p.asin}*`, ''];
+    // Costos y Tarifas
+    lines.push('*Costos y Tarifas*');
+    if (p.buy_box_price != null) lines.push(`• Buy Box: $${Number(p.buy_box_price).toFixed(2)}`);
+    if (p.wholesale_cost != null) lines.push(`• Costo wholesale: $${Number(p.wholesale_cost).toFixed(2)}`);
+    if (p.referral_fee != null) lines.push(`• Referral fee: $${Number(p.referral_fee).toFixed(2)} (${p.referral_pct || '15'}%)`);
+    if (p.fba_fulfillment_fee != null) lines.push(`• FBA fee: $${Number(p.fba_fulfillment_fee).toFixed(2)}`);
+    if (p.estimated_storage_monthly != null) lines.push(`• Storage: ~$${Number(p.estimated_storage_monthly).toFixed(2)}/mes`);
+    if (p.total_fees != null) lines.push(`• Total tarifas: $${Number(p.total_fees).toFixed(2)}`);
+    lines.push('');
+    // Rentabilidad
+    lines.push('*Rentabilidad*');
+    if (p.total_cost != null) lines.push(`• Costo total: $${Number(p.total_cost).toFixed(2)}`);
+    if (p.profit_per_unit != null) lines.push(`• Ganancia/unidad: $${Number(p.profit_per_unit).toFixed(2)}`);
+    if (p.roi != null) lines.push(`• ROI: ${Number(p.roi).toFixed(1)}%`);
+    if (p.margin != null) lines.push(`• Margen: ${Number(p.margin).toFixed(1)}%`);
+    if (p.monthly_profit != null) lines.push(`• Ganancia mensual est: $${Number(p.monthly_profit).toFixed(2)}`);
+    lines.push('');
+    // Producto
+    lines.push('*Producto*');
+    if (p.brand) lines.push(`• Marca: ${p.brand}`);
+    if (p.size_tier) lines.push(`• Size Tier: ${p.size_tier}`);
+    const dims = p.dimensions || {};
+    const fmt = (v) => (v != null ? Number(v).toFixed(1) : null);
+    const dimL = fmt(dims.length);
+    const dimW = fmt(dims.width);
+    const dimH = fmt(dims.height);
+    if (dimL && dimW && dimH) lines.push(`• Dims: ${dimL}x${dimW}x${dimH} in`);
+    if (dims.weight) lines.push(`• Peso: ${Number(dims.weight).toFixed(1)} lb`);
+    if (p.upc) lines.push(`• UPC: ${p.upc}`);
+    lines.push(`• ASIN: ${p.asin}`);
+    lines.push('');
+    // Elegibilidad
+    lines.push('*Elegibilidad*');
+    const restricted = p.restrictions?.restricted;
+    lines.push(`• Estado: ${restricted === false ? 'UNGATED ✓' : restricted === true ? 'GATED ✗' : 'Desconocido'}`);
+    lines.push('• Nota: Verificar en Seller Central antes de ordenar');
+    return lines.join('\n');
+}
+function buildVolumeMounts(group, isMain) {
+    const mounts = [];
+    const projectRoot = process.cwd();
+    const groupDir = resolveGroupFolderPath(group.folder);
+    if (isMain) {
+        // Main gets the project root read-only. Writable paths the agent needs
+        // (group folder, IPC, .claude/) are mounted separately below.
+        // Read-only prevents the agent from modifying host application code
+        // (src/, dist/, package.json, etc.) which would bypass the sandbox
+        // entirely on next restart.
+        mounts.push({
+            hostPath: projectRoot,
+            containerPath: '/workspace/project',
+            readonly: true,
+        });
+        // Main also gets its group folder as the working directory
+        mounts.push({
+            hostPath: groupDir,
+            containerPath: '/workspace/group',
+            readonly: false,
+        });
+    }
+    else {
+        // Other groups only get their own folder
+        mounts.push({
+            hostPath: groupDir,
+            containerPath: '/workspace/group',
+            readonly: false,
+        });
+        // Global memory directory (read-only for non-main)
+        // Only directory mounts are supported, not file mounts
+        const globalDir = path.join(GROUPS_DIR, 'global');
+        if (fs.existsSync(globalDir)) {
+            mounts.push({
+                hostPath: globalDir,
+                containerPath: '/workspace/global',
+                readonly: true,
+            });
+        }
+    }
+    // Per-group Claude sessions directory (isolated from other groups)
+    // Each group gets their own .claude/ to prevent cross-group session access
+    const groupSessionsDir = path.join(DATA_DIR, 'sessions', group.folder, '.claude');
+    fs.mkdirSync(groupSessionsDir, { recursive: true });
+    const settingsFile = path.join(groupSessionsDir, 'settings.json');
+    if (!fs.existsSync(settingsFile)) {
+        fs.writeFileSync(settingsFile, JSON.stringify({
+            env: {
+                // Enable agent swarms (subagent orchestration)
+                // https://code.claude.com/docs/en/agent-teams#orchestrate-teams-of-claude-code-sessions
+                CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+                // Load CLAUDE.md from additional mounted directories
+                // https://code.claude.com/docs/en/memory#load-memory-from-additional-directories
+                CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
+                // Enable Claude's memory feature (persists user preferences between sessions)
+                // https://code.claude.com/docs/en/memory#manage-auto-memory
+                CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
+            },
+        }, null, 2) + '\n');
+    }
+    // Sync skills from container/skills/ into each group's .claude/skills/
+    const skillsSrc = path.join(process.cwd(), 'container', 'skills');
+    const skillsDst = path.join(groupSessionsDir, 'skills');
+    if (fs.existsSync(skillsSrc)) {
+        for (const skillDir of fs.readdirSync(skillsSrc)) {
+            const srcDir = path.join(skillsSrc, skillDir);
+            if (!fs.statSync(srcDir).isDirectory())
+                continue;
+            const dstDir = path.join(skillsDst, skillDir);
+            fs.cpSync(srcDir, dstDir, { recursive: true });
+        }
+    }
+    mounts.push({
+        hostPath: groupSessionsDir,
+        containerPath: '/home/node/.claude',
+        readonly: false,
+    });
+    // Per-group IPC namespace: each group gets its own IPC directory
+    // This prevents cross-group privilege escalation via IPC
+    const groupIpcDir = resolveGroupIpcPath(group.folder);
+    fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
+    fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
+    fs.mkdirSync(path.join(groupIpcDir, 'input'), { recursive: true });
+    mounts.push({
+        hostPath: groupIpcDir,
+        containerPath: '/workspace/ipc',
+        readonly: false,
+    });
+    // Copy agent-runner source into a per-group writable location so agents
+    // can customize it (add tools, change behavior) without affecting other
+    // groups. Recompiled on container startup via entrypoint.sh.
+    const agentRunnerSrc = path.join(projectRoot, 'container', 'agent-runner', 'src');
+    const groupAgentRunnerDir = path.join(DATA_DIR, 'sessions', group.folder, 'agent-runner-src');
+    if (!fs.existsSync(groupAgentRunnerDir) && fs.existsSync(agentRunnerSrc)) {
+        fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true });
+    }
+    mounts.push({
+        hostPath: groupAgentRunnerDir,
+        containerPath: '/app/src',
+        readonly: false,
+    });
+    // Additional mounts validated against external allowlist (tamper-proof from containers)
+    if (group.containerConfig?.additionalMounts) {
+        const validatedMounts = validateAdditionalMounts(group.containerConfig.additionalMounts, group.name, isMain);
+        mounts.push(...validatedMounts);
+    }
+    return mounts;
+}
+/**
+ * Read allowed secrets from .env for passing to the container via stdin.
+ * Secrets are never written to disk or mounted as files.
+ */
+function readSecrets() {
+    return readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']);
+}
+function buildContainerArgs(mounts, containerName) {
+    const args = ['run', '-i', '--rm', '--name', containerName];
+    // Pass host timezone so container's local time matches the user's
+    args.push('-e', `TZ=${TIMEZONE}`);
+    // Allow containers to reach host services (Inngest, etc.)
+    args.push('--network', 'inngest_default');
+    // Mount patched agent-runner (WebSearch/WebFetch removed from allowedTools)
+    args.push('-v', '/opt/nanoclaw/patches/agent-runner-index.ts:/app/src/index.ts:ro');
+    // Run as host user so bind-mounted files are accessible.
+    // Skip when running as root (uid 0), as the container's node user (uid 1000),
+    // or when getuid is unavailable (native Windows without WSL).
+    const hostUid = process.getuid?.();
+    const hostGid = process.getgid?.();
+    if (hostUid != null && hostUid !== 0 && hostUid !== 1000) {
+        args.push('--user', `${hostUid}:${hostGid}`);
+        args.push('-e', 'HOME=/home/node');
+    }
+    for (const mount of mounts) {
+        if (mount.readonly) {
+            args.push(...readonlyMountArgs(mount.hostPath, mount.containerPath));
+        }
+        else {
+            args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
+        }
+    }
+    args.push(CONTAINER_IMAGE);
+    return args;
+}
+export async function runContainerAgent(group, input, onProcess, onOutput) {
+    const startTime = Date.now();
+    const groupDir = resolveGroupFolderPath(group.folder);
+    fs.mkdirSync(groupDir, { recursive: true });
+    // --- "detalles ASIN" handler: respond with cached analysis as quoted reply ---
+    const detallesRe = /\bdetalles\s+(B0[A-Z0-9]{8})\b/i;
+    // Extract clean text from NanoClaw XML message envelope
+    const msgMatchD = input.prompt.match(/<message[^>]*>([^<]+)<\/message>/);
+    const cleanTextD = msgMatchD ? msgMatchD[1].trim() : input.prompt.replace(/<[^>]+>/g, '').trim();
+    const detallesMatch = cleanTextD.match(detallesRe);
+    if (!input.isMain && detallesMatch) {
+        const asin = detallesMatch[1];
+        const analysisPath = path.join(GROUPS_DIR, input.groupFolder, 'cache', 'analysis', `${asin}.json`);
+        if (fs.existsSync(analysisPath)) {
+            const product = JSON.parse(fs.readFileSync(analysisPath, 'utf-8'));
+            const detailsText = formatFullDetails(product);
+            // Write quoted_reply IPC — quotes the original product card
+            const ipcDir = path.join(DATA_DIR, 'ipc', input.groupFolder, 'messages');
+            fs.mkdirSync(ipcDir, { recursive: true });
+            fs.writeFileSync(path.join(ipcDir, `msg-${Date.now()}-details.json`), JSON.stringify({
+                type: 'quoted_reply',
+                chatJid: input.chatJid,
+                text: detailsText,
+                quotedKeyFile: asin,
+                sender: 'inngest',
+                groupFolder: input.groupFolder,
+                timestamp: Date.now()
+            }));
+            // Tell agent to just acknowledge
+            input.prompt = '[SYSTEM: Product details sent as quoted reply. Reply: "Aquí tienes el análisis completo 👆"]';
+            logger.info({ group: group.name, asin }, 'Detalles detected — quoted reply IPC written');
+        } else {
+            input.prompt = `[SYSTEM: No cached analysis for ${asin}. Tell user: "No tengo análisis guardado para ${asin}. Usa \\"research ${asin}\\" para analizarlo primero."]`;
+            logger.info({ group: group.name, asin }, 'Detalles detected — no cached analysis');
+        }
+    }
+    // Auto-trigger Inngest for product research (bypasses agent decision-making)
+    const researchRe = /\b(research|analyze|analizar|investigar|analiza|investiga)\b/i;
+    const asinRe = /\bB0[A-Z0-9]{8}\b/;
+    if (!input.isMain && researchRe.test(input.prompt)) {
+        // Extract clean text from NanoClaw XML message envelope
+        const msgMatch = input.prompt.match(/<message[^>]*>([^<]+)<\/message>/);
+        const cleanText = msgMatch ? msgMatch[1].trim() : input.prompt.replace(/<[^>]+>/g, '').trim();
+        const asinMatch = cleanText.match(asinRe);
+        const costMatch = cleanText.match(/cost\s+(\d+\.?\d*)/i);
+        const eventPayload = JSON.stringify({
+            name: 'fba/research.requested',
+            data: {
+                query: asinMatch ? null : cleanText,
+                asin: asinMatch ? asinMatch[0] : null,
+                wholesale_cost: costMatch ? parseFloat(costMatch[1]) : null,
+            }
+        });
+        const req = http.request({
+            hostname: '127.0.0.1',
+            port: 8288,
+            path: '/e/local-fba-event-key',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(eventPayload) }
+        }, (res) => {
+            logger.info({ group: group.name, status: res.statusCode }, 'Inngest research auto-triggered');
+        });
+        req.on('error', (err) => {
+            logger.warn({ group: group.name, error: err.message }, 'Inngest auto-trigger failed');
+        });
+        req.write(eventPayload);
+        req.end();
+        input.prompt = `[SYSTEM: Inngest research workflow has been automatically triggered for this request. Results will be sent directly to WhatsApp as product cards. Your ONLY job is to reply: "Investigación iniciada. Te enviaré los resultados con fichas de producto." Do NOT research products yourself. Do NOT generate product lists or recommendations. Do NOT use any tools for research.]\n\nUser message: ${input.prompt}`;
+        logger.info({ group: group.name, prompt: input.prompt.slice(0, 100) }, 'Research detected — Inngest triggered, prompt modified');
+    }
+    const mounts = buildVolumeMounts(group, input.isMain);
+    const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
+    const containerName = `nanoclaw-${safeName}-${Date.now()}`;
+    const containerArgs = buildContainerArgs(mounts, containerName);
+    logger.debug({
+        group: group.name,
+        containerName,
+        mounts: mounts.map((m) => `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`),
+        containerArgs: containerArgs.join(' '),
+    }, 'Container mount configuration');
+    logger.info({
+        group: group.name,
+        containerName,
+        mountCount: mounts.length,
+        isMain: input.isMain,
+    }, 'Spawning container agent');
+    const logsDir = path.join(groupDir, 'logs');
+    fs.mkdirSync(logsDir, { recursive: true });
+    return new Promise((resolve) => {
+        const container = spawn(CONTAINER_RUNTIME_BIN, containerArgs, {
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        onProcess(container, containerName);
+        let stdout = '';
+        let stderr = '';
+        let stdoutTruncated = false;
+        let stderrTruncated = false;
+        // Pass secrets via stdin (never written to disk or mounted as files)
+        input.secrets = readSecrets();
+        container.stdin.write(JSON.stringify(input));
+        container.stdin.end();
+        // Remove secrets from input so they don't appear in logs
+        delete input.secrets;
+        // Streaming output: parse OUTPUT_START/END marker pairs as they arrive
+        let parseBuffer = '';
+        let newSessionId;
+        let outputChain = Promise.resolve();
+        container.stdout.on('data', (data) => {
+            const chunk = data.toString();
+            // Always accumulate for logging
+            if (!stdoutTruncated) {
+                const remaining = CONTAINER_MAX_OUTPUT_SIZE - stdout.length;
+                if (chunk.length > remaining) {
+                    stdout += chunk.slice(0, remaining);
+                    stdoutTruncated = true;
+                    logger.warn({ group: group.name, size: stdout.length }, 'Container stdout truncated due to size limit');
+                }
+                else {
+                    stdout += chunk;
+                }
+            }
+            // Stream-parse for output markers
+            if (onOutput) {
+                parseBuffer += chunk;
+                let startIdx;
+                while ((startIdx = parseBuffer.indexOf(OUTPUT_START_MARKER)) !== -1) {
+                    const endIdx = parseBuffer.indexOf(OUTPUT_END_MARKER, startIdx);
+                    if (endIdx === -1)
+                        break; // Incomplete pair, wait for more data
+                    const jsonStr = parseBuffer
+                        .slice(startIdx + OUTPUT_START_MARKER.length, endIdx)
+                        .trim();
+                    parseBuffer = parseBuffer.slice(endIdx + OUTPUT_END_MARKER.length);
+                    try {
+                        const parsed = JSON.parse(jsonStr);
+                        if (parsed.newSessionId) {
+                            newSessionId = parsed.newSessionId;
+                        }
+                        hadStreamingOutput = true;
+                        // Activity detected — reset the hard timeout
+                        resetTimeout();
+                        // Call onOutput for all markers (including null results)
+                        // so idle timers start even for "silent" query completions.
+                        outputChain = outputChain.then(() => onOutput(parsed));
+                    }
+                    catch (err) {
+                        logger.warn({ group: group.name, error: err }, 'Failed to parse streamed output chunk');
+                    }
+                }
+            }
+        });
+        container.stderr.on('data', (data) => {
+            const chunk = data.toString();
+            const lines = chunk.trim().split('\n');
+            for (const line of lines) {
+                if (line)
+                    logger.debug({ container: group.folder }, line);
+            }
+            // Don't reset timeout on stderr — SDK writes debug logs continuously.
+            // Timeout only resets on actual output (OUTPUT_MARKER in stdout).
+            if (stderrTruncated)
+                return;
+            const remaining = CONTAINER_MAX_OUTPUT_SIZE - stderr.length;
+            if (chunk.length > remaining) {
+                stderr += chunk.slice(0, remaining);
+                stderrTruncated = true;
+                logger.warn({ group: group.name, size: stderr.length }, 'Container stderr truncated due to size limit');
+            }
+            else {
+                stderr += chunk;
+            }
+        });
+        let timedOut = false;
+        let hadStreamingOutput = false;
+        const configTimeout = group.containerConfig?.timeout || CONTAINER_TIMEOUT;
+        // Grace period: hard timeout must be at least IDLE_TIMEOUT + 30s so the
+        // graceful _close sentinel has time to trigger before the hard kill fires.
+        const timeoutMs = Math.max(configTimeout, IDLE_TIMEOUT + 30_000);
+        const killOnTimeout = () => {
+            timedOut = true;
+            logger.error({ group: group.name, containerName }, 'Container timeout, stopping gracefully');
+            exec(stopContainer(containerName), { timeout: 15000 }, (err) => {
+                if (err) {
+                    logger.warn({ group: group.name, containerName, err }, 'Graceful stop failed, force killing');
+                    container.kill('SIGKILL');
+                }
+            });
+        };
+        let timeout = setTimeout(killOnTimeout, timeoutMs);
+        // Reset the timeout whenever there's activity (streaming output)
+        const resetTimeout = () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(killOnTimeout, timeoutMs);
+        };
+        container.on('close', (code) => {
+            clearTimeout(timeout);
+            const duration = Date.now() - startTime;
+            if (timedOut) {
+                const ts = new Date().toISOString().replace(/[:.]/g, '-');
+                const timeoutLog = path.join(logsDir, `container-${ts}.log`);
+                fs.writeFileSync(timeoutLog, [
+                    `=== Container Run Log (TIMEOUT) ===`,
+                    `Timestamp: ${new Date().toISOString()}`,
+                    `Group: ${group.name}`,
+                    `Container: ${containerName}`,
+                    `Duration: ${duration}ms`,
+                    `Exit Code: ${code}`,
+                    `Had Streaming Output: ${hadStreamingOutput}`,
+                ].join('\n'));
+                // Timeout after output = idle cleanup, not failure.
+                // The agent already sent its response; this is just the
+                // container being reaped after the idle period expired.
+                if (hadStreamingOutput) {
+                    logger.info({ group: group.name, containerName, duration, code }, 'Container timed out after output (idle cleanup)');
+                    outputChain.then(() => {
+                        resolve({
+                            status: 'success',
+                            result: null,
+                            newSessionId,
+                        });
+                    });
+                    return;
+                }
+                logger.error({ group: group.name, containerName, duration, code }, 'Container timed out with no output');
+                resolve({
+                    status: 'error',
+                    result: null,
+                    error: `Container timed out after ${configTimeout}ms`,
+                });
+                return;
+            }
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const logFile = path.join(logsDir, `container-${timestamp}.log`);
+            const isVerbose = process.env.LOG_LEVEL === 'debug' || process.env.LOG_LEVEL === 'trace';
+            const logLines = [
+                `=== Container Run Log ===`,
+                `Timestamp: ${new Date().toISOString()}`,
+                `Group: ${group.name}`,
+                `IsMain: ${input.isMain}`,
+                `Duration: ${duration}ms`,
+                `Exit Code: ${code}`,
+                `Stdout Truncated: ${stdoutTruncated}`,
+                `Stderr Truncated: ${stderrTruncated}`,
+                ``,
+            ];
+            const isError = code !== 0;
+            if (isVerbose || isError) {
+                logLines.push(`=== Input ===`, JSON.stringify(input, null, 2), ``, `=== Container Args ===`, containerArgs.join(' '), ``, `=== Mounts ===`, mounts
+                    .map((m) => `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`)
+                    .join('\n'), ``, `=== Stderr${stderrTruncated ? ' (TRUNCATED)' : ''} ===`, stderr, ``, `=== Stdout${stdoutTruncated ? ' (TRUNCATED)' : ''} ===`, stdout);
+            }
+            else {
+                logLines.push(`=== Input Summary ===`, `Prompt length: ${input.prompt.length} chars`, `Session ID: ${input.sessionId || 'new'}`, ``, `=== Mounts ===`, mounts
+                    .map((m) => `${m.containerPath}${m.readonly ? ' (ro)' : ''}`)
+                    .join('\n'), ``);
+            }
+            fs.writeFileSync(logFile, logLines.join('\n'));
+            logger.debug({ logFile, verbose: isVerbose }, 'Container log written');
+            if (code !== 0) {
+                logger.error({
+                    group: group.name,
+                    code,
+                    duration,
+                    stderr,
+                    stdout,
+                    logFile,
+                }, 'Container exited with error');
+                resolve({
+                    status: 'error',
+                    result: null,
+                    error: `Container exited with code ${code}: ${stderr.slice(-200)}`,
+                });
+                return;
+            }
+            // Streaming mode: wait for output chain to settle, return completion marker
+            if (onOutput) {
+                outputChain.then(() => {
+                    logger.info({ group: group.name, duration, newSessionId }, 'Container completed (streaming mode)');
+                    resolve({
+                        status: 'success',
+                        result: null,
+                        newSessionId,
+                    });
+                });
+                return;
+            }
+            // Legacy mode: parse the last output marker pair from accumulated stdout
+            try {
+                // Extract JSON between sentinel markers for robust parsing
+                const startIdx = stdout.indexOf(OUTPUT_START_MARKER);
+                const endIdx = stdout.indexOf(OUTPUT_END_MARKER);
+                let jsonLine;
+                if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                    jsonLine = stdout
+                        .slice(startIdx + OUTPUT_START_MARKER.length, endIdx)
+                        .trim();
+                }
+                else {
+                    // Fallback: last non-empty line (backwards compatibility)
+                    const lines = stdout.trim().split('\n');
+                    jsonLine = lines[lines.length - 1];
+                }
+                const output = JSON.parse(jsonLine);
+                logger.info({
+                    group: group.name,
+                    duration,
+                    status: output.status,
+                    hasResult: !!output.result,
+                }, 'Container completed');
+                resolve(output);
+            }
+            catch (err) {
+                logger.error({
+                    group: group.name,
+                    stdout,
+                    stderr,
+                    error: err,
+                }, 'Failed to parse container output');
+                resolve({
+                    status: 'error',
+                    result: null,
+                    error: `Failed to parse container output: ${err instanceof Error ? err.message : String(err)}`,
+                });
+            }
+        });
+        container.on('error', (err) => {
+            clearTimeout(timeout);
+            logger.error({ group: group.name, containerName, error: err }, 'Container spawn error');
+            resolve({
+                status: 'error',
+                result: null,
+                error: `Container spawn error: ${err.message}`,
+            });
+        });
+    });
+}
+export function writeTasksSnapshot(groupFolder, isMain, tasks) {
+    // Write filtered tasks to the group's IPC directory
+    const groupIpcDir = resolveGroupIpcPath(groupFolder);
+    fs.mkdirSync(groupIpcDir, { recursive: true });
+    // Main sees all tasks, others only see their own
+    const filteredTasks = isMain
+        ? tasks
+        : tasks.filter((t) => t.groupFolder === groupFolder);
+    const tasksFile = path.join(groupIpcDir, 'current_tasks.json');
+    fs.writeFileSync(tasksFile, JSON.stringify(filteredTasks, null, 2));
+}
+/**
+ * Write available groups snapshot for the container to read.
+ * Only main group can see all available groups (for activation).
+ * Non-main groups only see their own registration status.
+ */
+export function writeGroupsSnapshot(groupFolder, isMain, groups, registeredJids) {
+    const groupIpcDir = resolveGroupIpcPath(groupFolder);
+    fs.mkdirSync(groupIpcDir, { recursive: true });
+    // Main sees all groups; others see nothing (they can't activate groups)
+    const visibleGroups = isMain ? groups : [];
+    const groupsFile = path.join(groupIpcDir, 'available_groups.json');
+    fs.writeFileSync(groupsFile, JSON.stringify({
+        groups: visibleGroups,
+        lastSync: new Date().toISOString(),
+    }, null, 2));
+}
+//# sourceMappingURL=container-runner.js.map
