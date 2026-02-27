@@ -85,9 +85,21 @@ jobs:
             inngest/worker/lib/*.js \
             inngest/worker/functions/*.js
 
-          # Create deploy script
+          # Create deploy script with rollback safety
           cat > /tmp/deploy.sh << 'SCRIPT'
           set -e
+
+          rollback() {
+            echo "ROLLBACK: Restoring systemd services..."
+            cd /opt/globalink-fba && docker compose down 2>/dev/null || true
+            systemctl enable nanoclaw.service 2>/dev/null || true
+            systemctl start nanoclaw.service 2>/dev/null || true
+            systemctl enable inngest.service 2>/dev/null || true
+            systemctl start inngest.service 2>/dev/null || true
+            cd /opt/inngest && docker compose up -d 2>/dev/null || true
+            echo "ROLLBACK complete: systemd services restored"
+            exit 1
+          }
 
           # Extract synced files to their destinations
           cd /tmp && tar xzf deploy.tar.gz
@@ -102,7 +114,7 @@ jobs:
           # Docker login to GHCR
           echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GH_ACTOR}" --password-stdin
 
-          # Stop legacy services (systemd -> Docker transition, idempotent)
+          # Stop legacy services (systemd -> Docker transition)
           systemctl stop nanoclaw.service 2>/dev/null || true
           systemctl disable nanoclaw.service 2>/dev/null || true
           cd /opt/inngest && docker compose down 2>/dev/null || true
@@ -115,14 +127,14 @@ jobs:
           docker compose up -d --remove-orphans
           docker image prune -f
 
-          # Verify containers are running
-          sleep 5
+          # Verify containers are running (rollback if not)
+          sleep 8
           RUNNING=$(docker compose ps --format json | grep -c '"running"' || true)
           if [ "$RUNNING" -lt 3 ]; then
             echo "WARNING: Only $RUNNING/3 containers running"
             docker compose ps
-            docker compose logs --tail=20
-            exit 1
+            docker compose logs --tail=30
+            rollback
           fi
           echo "Deploy complete: ${DEPLOY_SHA} ($RUNNING containers running)"
           SCRIPT

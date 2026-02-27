@@ -1,16 +1,18 @@
-# Stage 1: Build — clone upstream NanoClaw and compile TypeScript
+# Stage 1: Build — clone upstream NanoClaw, install deps, compile TypeScript
 FROM node:22-slim AS builder
 
 RUN apt-get update && \
-    apt-get install -y git ca-certificates --no-install-recommends && \
+    apt-get install -y git ca-certificates python3 make g++ --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/nanoclaw
 
 RUN git clone https://github.com/qwibitai/nanoclaw.git .
 
-# Install all deps (including TypeScript) but skip husky prepare hook
-RUN npm install --ignore-scripts
+# HUSKY=0 skips the husky prepare hook without --ignore-scripts,
+# so native modules like better-sqlite3 can compile/download prebuild
+ENV HUSKY=0
+RUN npm install
 
 # Compile TypeScript → dist/
 RUN npx tsc
@@ -33,13 +35,13 @@ RUN install -m 0755 -d /etc/apt/keyrings && \
 
 WORKDIR /opt/nanoclaw
 
-# Copy built output, package files, and production node_modules
+# Copy built output, package files, and node_modules from builder
 COPY --from=builder /opt/nanoclaw/dist dist/
 COPY --from=builder /opt/nanoclaw/package.json /opt/nanoclaw/package-lock.json ./
 COPY --from=builder /opt/nanoclaw/node_modules node_modules/
 
-# Prune to production-only deps
-RUN npm prune --omit=dev --ignore-scripts
+# Prune dev deps (keep native modules intact)
+RUN npm prune --omit=dev
 
 # Apply our patches over the compiled upstream dist/
 COPY nanoclaw/patches/channels/whatsapp.js dist/channels/whatsapp.js
