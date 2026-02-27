@@ -58,56 +58,77 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config << 'SSH_CONFIG'
+          Host deploy-vps
+            HostName ${{ secrets.VPS_HOST }}
+            User root
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ConnectTimeout 30
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+          SSH_CONFIG
+          sed -i 's/^          //' ~/.ssh/config
 
-      - name: Sync files to VPS
+      - name: Sync files and deploy
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GH_ACTOR: ${{ github.actor }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
-          SCP="scp -i ~/.ssh/deploy_key"
-          HOST="root@${{ secrets.VPS_HOST }}"
+          # Bundle all deploy files into a single tarball
+          tar czf /tmp/deploy.tar.gz \
+            docker-compose.yml \
+            config/CLAUDE.md \
+            tools/*.py \
+            inngest/worker/lib/*.js \
+            inngest/worker/functions/*.js
 
-          # Sync docker-compose.yml to deploy directory
-          $SCP docker-compose.yml ${HOST}:/opt/globalink-fba/
+          # Create deploy script
+          cat > /tmp/deploy.sh << 'SCRIPT'
+          set -e
 
-          # Sync business config (CLAUDE.md) to NanoClaw groups
-          $SCP config/CLAUDE.md ${HOST}:/opt/nanoclaw/groups/owner/CLAUDE.md
+          # Extract synced files to their destinations
+          cd /tmp && tar xzf deploy.tar.gz
+          cp docker-compose.yml /opt/globalink-fba/
+          cp config/CLAUDE.md /opt/nanoclaw/groups/owner/CLAUDE.md
+          cp tools/*.py /opt/nanoclaw/groups/owner/tools/
+          mkdir -p /opt/inngest/worker/lib /opt/inngest/worker/functions
+          cp inngest/worker/lib/*.js /opt/inngest/worker/lib/
+          cp inngest/worker/functions/*.js /opt/inngest/worker/functions/
+          rm -rf /tmp/deploy.tar.gz /tmp/deploy.sh /tmp/docker-compose.yml /tmp/config /tmp/tools /tmp/inngest
 
-          # Sync Python tools (skip .env which has secrets)
-          $SCP tools/*.py ${HOST}:/opt/nanoclaw/groups/owner/tools/
+          # Docker login to GHCR
+          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GH_ACTOR}" --password-stdin
 
-          # Sync Inngest worker source
-          $SCP inngest/worker/lib/*.js ${HOST}:/opt/inngest/worker/lib/ 2>/dev/null || true
-          $SCP inngest/worker/functions/*.js ${HOST}:/opt/inngest/worker/functions/ 2>/dev/null || true
+          # Stop legacy services (systemd -> Docker transition, idempotent)
+          systemctl stop nanoclaw.service 2>/dev/null || true
+          systemctl disable nanoclaw.service 2>/dev/null || true
+          cd /opt/inngest && docker compose down 2>/dev/null || true
+          systemctl stop inngest.service 2>/dev/null || true
+          systemctl disable inngest.service 2>/dev/null || true
 
-      - name: Deploy containers
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -e
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          # Deploy unified Docker stack
+          cd /opt/globalink-fba
+          docker compose pull nanoclaw inngest-worker
+          docker compose up -d --remove-orphans
+          docker image prune -f
 
-            # Stop legacy services (systemd → Docker transition)
-            systemctl stop nanoclaw.service 2>/dev/null || true
-            systemctl disable nanoclaw.service 2>/dev/null || true
-            cd /opt/inngest && docker compose down 2>/dev/null || true
-            systemctl stop inngest.service 2>/dev/null || true
-            systemctl disable inngest.service 2>/dev/null || true
+          # Verify containers are running
+          sleep 5
+          RUNNING=$(docker compose ps --format json | grep -c '"running"' || true)
+          if [ "$RUNNING" -lt 3 ]; then
+            echo "WARNING: Only $RUNNING/3 containers running"
+            docker compose ps
+            docker compose logs --tail=20
+            exit 1
+          fi
+          echo "Deploy complete: ${DEPLOY_SHA} ($RUNNING containers running)"
+          SCRIPT
 
-            # Deploy unified Docker stack
-            cd /opt/globalink-fba
-            docker compose pull nanoclaw inngest-worker
-            docker compose up -d --remove-orphans
-            docker image prune -f
+          # Transfer bundle + script in one SCP call (2 files, 1 connection)
+          scp /tmp/deploy.tar.gz /tmp/deploy.sh deploy-vps:/tmp/
 
-            # Verify containers are running
-            sleep 5
-            RUNNING=$(docker compose ps --format json | grep -c '"running"' || true)
-            if [ "$RUNNING" -lt 3 ]; then
-              echo "WARNING: Only $RUNNING/3 containers running"
-              docker compose ps
-              docker compose logs --tail=20
-              exit 1
-            fi
-            echo "Deploy complete: ${{ github.sha }} ($RUNNING containers running)"
+          # Execute deploy script via single SSH session
+          ssh deploy-vps "GHCR_TOKEN='${GHCR_TOKEN}' GH_ACTOR='${GH_ACTOR}' DEPLOY_SHA='${DEPLOY_SHA}' bash /tmp/deploy.sh"
