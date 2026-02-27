@@ -1,9 +1,0 @@
-language: "en"
-reviews:
-  profile: "chill"
-  high_level_summary: true
-  poem: false
-  review_status: true
-  auto_review:
-    enabled: true
-    drafts: false
