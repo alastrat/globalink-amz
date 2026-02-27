@@ -1,0 +1,13 @@
+{
+  "name": "fba-inngest-worker",
+  "version": "1.0.0",
+  "description": "Inngest worker for FBA product research workflows",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "inngest": "^3.27.0",
+    "express": "^4.21.0"
+  }
+}

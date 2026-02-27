@@ -1,0 +1,36 @@
+services:
+  inngest-server:
+    image: inngest/inngest:latest
+    ports:
+      - "8288:8288"
+    environment:
+      - INNGEST_EVENT_KEY=${INNGEST_EVENT_KEY:-local-dev-key}
+      - INNGEST_SIGNING_KEY=${INNGEST_SIGNING_KEY:-signkey-test-12345678}
+    volumes:
+      - inngest-data:/var/lib/inngest
+    restart: always
+    command: inngest dev -u http://inngest-worker:3500/api/inngest --no-discovery
+
+  inngest-worker:
+    build: ./worker
+    ports:
+      - "3500:3500"
+    environment:
+      - INNGEST_DEV=1
+      - INNGEST_BASE_URL=http://inngest-server:8288
+      - INNGEST_EVENT_KEY=${INNGEST_EVENT_KEY:-local-dev-key}
+      - INNGEST_SIGNING_KEY=${INNGEST_SIGNING_KEY:-signkey-test-12345678}
+      - TOOLS_DIR=/tools
+      - IPC_DIR=/ipc/messages
+      - CACHE_DIR=/cache
+      - CHAT_JID=573002061607@s.whatsapp.net
+    volumes:
+      - /opt/nanoclaw/groups/owner/tools:/tools:ro
+      - /opt/nanoclaw/data/ipc/owner/messages:/ipc/messages
+      - /opt/nanoclaw/groups/owner/cache:/cache
+    depends_on:
+      - inngest-server
+    restart: always
+
+volumes:
+  inngest-data:
