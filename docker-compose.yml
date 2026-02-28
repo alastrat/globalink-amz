@@ -4,24 +4,11 @@
 # Bind-mounts existing VPS paths for WhatsApp auth, groups, and IPC data.
 # Run: docker compose up -d
 
-services:
-  nanoclaw:
-    image: ghcr.io/alastrat/globalink-amz/nanoclaw:${IMAGE_TAG:-latest}
-    build:
-      context: .
-      dockerfile: docker/nanoclaw.Dockerfile
-    restart: always
-    env_file: .env.nanoclaw
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/nanoclaw/store:/opt/nanoclaw/store
-      - /opt/nanoclaw/data:/opt/nanoclaw/data
-      - /opt/nanoclaw/groups:/opt/nanoclaw/groups
-    networks:
-      - inngest
-    depends_on:
-      - inngest-server
+  # NanoClaw is managed via 'docker run' (not compose) due to compose signal
+  # propagation issues that cause immediate SIGTERM after start. See deploy.yml
+  # for the docker run command that manages the nanoclaw container.
 
+services:
   inngest-server:
     image: inngest/inngest:latest
     restart: always

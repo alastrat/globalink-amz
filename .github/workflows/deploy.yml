@@ -89,8 +89,13 @@ jobs:
           cat > /tmp/deploy.sh << 'SCRIPT'
           set -e
 
+          NANOCLAW_IMAGE="ghcr.io/alastrat/globalink-amz/nanoclaw:latest"
+          NANOCLAW_CONTAINER="globalink-fba-nanoclaw"
+
           rollback() {
             echo "ROLLBACK: Restoring systemd services..."
+            docker stop ${NANOCLAW_CONTAINER} 2>/dev/null || true
+            docker rm ${NANOCLAW_CONTAINER} 2>/dev/null || true
             cd /opt/globalink-fba && docker compose down 2>/dev/null || true
             systemctl enable nanoclaw.service 2>/dev/null || true
             systemctl start nanoclaw.service 2>/dev/null || true
@@ -114,29 +119,51 @@ jobs:
           # Docker login to GHCR
           echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GH_ACTOR}" --password-stdin
 
-          # Stop legacy services (systemd -> Docker transition)
+          # Pull latest images
+          docker pull ${NANOCLAW_IMAGE}
+          cd /opt/globalink-fba && docker compose pull inngest-worker
+
+          # Stop legacy services (systemd -> Docker transition, idempotent)
           systemctl stop nanoclaw.service 2>/dev/null || true
           systemctl disable nanoclaw.service 2>/dev/null || true
           cd /opt/inngest && docker compose down 2>/dev/null || true
           systemctl stop inngest.service 2>/dev/null || true
           systemctl disable inngest.service 2>/dev/null || true
 
-          # Deploy unified Docker stack
+          # Stop existing containers
+          docker stop ${NANOCLAW_CONTAINER} 2>/dev/null || true
+          docker rm ${NANOCLAW_CONTAINER} 2>/dev/null || true
+
+          # Deploy Inngest via compose (server + worker)
           cd /opt/globalink-fba
-          docker compose pull nanoclaw inngest-worker
           docker compose up -d --remove-orphans
+
+          # Deploy NanoClaw via docker run (compose has signal propagation issues)
+          docker run -d \
+            --name ${NANOCLAW_CONTAINER} \
+            --restart always \
+            --env-file /opt/globalink-fba/.env.nanoclaw \
+            --network globalink-fba_inngest \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /opt/nanoclaw/store:/opt/nanoclaw/store \
+            -v /opt/nanoclaw/data:/opt/nanoclaw/data \
+            -v /opt/nanoclaw/groups:/opt/nanoclaw/groups \
+            ${NANOCLAW_IMAGE}
+
           docker image prune -f
 
-          # Verify containers are running (rollback if not)
-          sleep 8
-          RUNNING=$(docker compose ps --format json | grep -c '"running"' || true)
-          if [ "$RUNNING" -lt 3 ]; then
-            echo "WARNING: Only $RUNNING/3 containers running"
+          # Verify all services are running (rollback if not)
+          sleep 10
+          NC_STATUS=$(docker inspect ${NANOCLAW_CONTAINER} --format "{{.State.Status}}" 2>/dev/null || echo "missing")
+          COMPOSE_RUNNING=$(docker compose ps --format json | grep -c '"running"' || true)
+
+          if [ "$NC_STATUS" != "running" ] || [ "$COMPOSE_RUNNING" -lt 2 ]; then
+            echo "WARNING: NanoClaw=$NC_STATUS, Compose=$COMPOSE_RUNNING/2 running"
+            docker logs ${NANOCLAW_CONTAINER} --tail=20 2>&1 || true
             docker compose ps
-            docker compose logs --tail=30
             rollback
           fi
-          echo "Deploy complete: ${DEPLOY_SHA} ($RUNNING containers running)"
+          echo "Deploy complete: ${DEPLOY_SHA} (NanoClaw=$NC_STATUS, Inngest=$COMPOSE_RUNNING/2)"
           SCRIPT
 
           # Transfer bundle + script in one SCP call (2 files, 1 connection)
