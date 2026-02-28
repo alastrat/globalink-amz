@@ -38,8 +38,8 @@ variable "alert_email" {
   type        = string
 }
 
-variable "spaces_region" {
-  description = "Region for DO Spaces bucket"
-  type        = string
-  default     = "nyc3"
-}
+# variable "spaces_region" {
+#   description = "Region for DO Spaces bucket"
+#   type        = string
+#   default     = "nyc3"
+# }

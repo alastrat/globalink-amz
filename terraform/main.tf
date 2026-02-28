@@ -12,6 +12,12 @@ resource "digitalocean_droplet" "fba" {
   tags     = ["fba", "production"]
 
   user_data = file("${path.module}/cloud-init.yml")
+
+  # Imported droplet uses a custom marketplace image; these fields
+  # can't be changed in-place so we ignore drift after import.
+  lifecycle {
+    ignore_changes = [image, user_data, ssh_keys]
+  }
 }
 
 resource "digitalocean_reserved_ip" "fba" {
@@ -56,18 +62,19 @@ resource "digitalocean_firewall" "fba" {
   }
 }
 
-resource "digitalocean_spaces_bucket" "backups" {
-  name   = "globalink-fba-backups"
-  region = var.spaces_region
-  acl    = "private"
-
-  lifecycle_rule {
-    enabled = true
-    expiration {
-      days = 30
-    }
-  }
-}
+# Spaces bucket for backups (requires Spaces API credentials, add later)
+# resource "digitalocean_spaces_bucket" "backups" {
+#   name   = "globalink-fba-backups"
+#   region = var.spaces_region
+#   acl    = "private"
+#
+#   lifecycle_rule {
+#     enabled = true
+#     expiration {
+#       days = 30
+#     }
+#   }
+# }
 
 resource "digitalocean_monitor_alert" "cpu" {
   alerts {

@@ -13,12 +13,12 @@ output "droplet_id" {
   value       = digitalocean_droplet.fba.id
 }
 
-output "spaces_bucket" {
-  description = "Spaces bucket name"
-  value       = digitalocean_spaces_bucket.backups.name
-}
-
-output "spaces_endpoint" {
-  description = "Spaces endpoint URL"
-  value       = digitalocean_spaces_bucket.backups.bucket_domain_name
-}
+# output "spaces_bucket" {
+#   description = "Spaces bucket name"
+#   value       = digitalocean_spaces_bucket.backups.name
+# }
+#
+# output "spaces_endpoint" {
+#   description = "Spaces endpoint URL"
+#   value       = digitalocean_spaces_bucket.backups.bucket_domain_name
+# }
