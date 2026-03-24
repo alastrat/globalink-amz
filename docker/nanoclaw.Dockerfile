@@ -7,7 +7,9 @@ RUN apt-get update && \
 
 WORKDIR /opt/nanoclaw
 
-RUN git clone https://github.com/qwibitai/nanoclaw.git .
+# Pin to commit 29a5daf — upstream later removed WhatsApp (baileys) deps
+RUN git clone https://github.com/qwibitai/nanoclaw.git . && \
+    git checkout 29a5daf
 
 # HUSKY=0 skips the husky prepare hook without --ignore-scripts,
 # so native modules like better-sqlite3 can compile/download prebuild
