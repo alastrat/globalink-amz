@@ -176,7 +176,7 @@ function buildContainerArgs(mounts, containerName) {
     // Pass host timezone so container's local time matches the user's
     args.push('-e', `TZ=${TIMEZONE}`);
     // Allow containers to reach host services (Inngest, etc.)
-    args.push('--network', 'inngest_default');
+    args.push('--network', 'globalink-fba_inngest');
     // Mount patched agent-runner (WebSearch/WebFetch removed from allowedTools)
     args.push('-v', '/opt/nanoclaw/patches/agent-runner-index.ts:/app/src/index.ts:ro');
     // Run as host user so bind-mounted files are accessible.
