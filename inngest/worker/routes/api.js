@@ -76,6 +76,7 @@ router.use("/api/products", authMiddleware);
 router.use("/api/runs", authMiddleware);
 router.use("/api/stats", authMiddleware);
 router.use("/api/product", authMiddleware);
+router.use("/api/run", authMiddleware);
 
 // ---------- Dashboard ----------
 router.get("/dashboard", (_req, res) => {
@@ -155,6 +156,15 @@ router.get("/api/product/:asin", async (req, res) => {
   }
 
   const result = await queryDB(["export-history", asin]);
+  res.json(result);
+});
+
+// ---------- API: Single run detail ----------
+router.get("/api/run/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id) || id < 1) return res.status(400).json({ error: "Invalid run ID" });
+  const result = await queryDB(["export-run-detail", String(id)]);
+  if (result.error) return res.status(500).json(result);
   res.json(result);
 });
 

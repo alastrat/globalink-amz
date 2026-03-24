@@ -346,11 +346,100 @@
       color: var(--text-muted);
     }
 
+    /* ---- Tabs ---- */
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      margin-left: 16px;
+    }
+    .tab-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 6px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--sans);
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); background: rgba(99,102,241,0.08); }
+    .tab-btn.active {
+      color: var(--text-bright);
+      background: var(--card);
+      border-color: var(--border);
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ---- Runs Table ---- */
+    .runs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .runs-header h2 { font-size: 16px; color: var(--text-bright); }
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--green);
+      font-weight: 600;
+    }
+    .live-dot {
+      width: 8px; height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .source-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .source-research { background: #238636; }
+    .source-nightly { background: #6366f1; }
+    .source-manual { background: #388bfd; }
+    .source-unknown { background: var(--gray); }
+
+    .run-row { cursor: pointer; transition: background 0.1s; }
+    .run-row:hover { background: rgba(99,102,241,0.06); }
+    .run-row.expanded { background: rgba(99,102,241,0.04); }
+    .run-detail-row td { padding: 0; border-top: none; }
+    .run-detail-content {
+      padding: 12px 14px 16px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+    }
+    .run-detail-content table { background: var(--bg); }
+    .run-detail-content thead { background: var(--card); }
+    .run-detail-content td { font-size: 12px; padding: 6px 10px; }
+    .run-detail-content th { font-size: 10px; padding: 8px 10px; }
+
+    .expand-arrow {
+      display: inline-block;
+      transition: transform 0.2s;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .run-row.expanded .expand-arrow { transform: rotate(90deg); }
+
     /* ---- Responsive ---- */
     @media (max-width: 768px) {
       .container { padding: 12px; }
       .header { flex-direction: column; align-items: flex-start; }
       .header h1 { font-size: 18px; }
+      .tab-nav { margin-left: 0; margin-top: 8px; }
       .charts-grid { grid-template-columns: 1fr; }
       .kpi-card { min-width: 120px; padding: 12px; }
       .kpi-value { font-size: 20px; }
@@ -408,7 +497,13 @@
 
   <!-- Header -->
   <div class="header">
-    <h1>ASIN Hunter Dashboard</h1>
+    <div style="display:flex;align-items:center;">
+      <h1>ASIN Hunter Dashboard</h1>
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="products">Products</button>
+        <button class="tab-btn" data-tab="runs">Runs</button>
+      </div>
+    </div>
     <div class="header-controls">
       <input type="date" id="date-from" title="From date">
       <input type="date" id="date-to" title="To date">
@@ -416,6 +511,9 @@
       <button class="btn btn-secondary" id="btn-export">Export CSV</button>
     </div>
   </div>
+
+  <!-- ========== Products Tab ========== -->
+  <div class="tab-content active" id="products-tab">
 
   <!-- KPI Cards -->
   <div class="kpi-row">
@@ -521,6 +619,38 @@
       <p>Run a research scan to populate the dashboard.</p>
     </div>
   </div>
+
+  </div><!-- /products-tab -->
+
+  <!-- ========== Runs Tab ========== -->
+  <div class="tab-content" id="runs-tab">
+    <div class="runs-header">
+      <h2>Research Runs</h2>
+      <span class="live-indicator" id="runs-live"><span class="live-dot"></span> Live</span>
+    </div>
+    <div class="table-wrapper">
+      <table id="runs-table">
+        <thead>
+          <tr>
+            <th style="width:30px;"></th>
+            <th>ID</th>
+            <th>Timestamp</th>
+            <th>Source</th>
+            <th>Total ASINs</th>
+            <th>Approved</th>
+            <th>Restricted</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="runs-tbody"></tbody>
+      </table>
+      <div class="empty-state" id="runs-empty" style="display:none;">
+        <p><strong>No runs yet</strong></p>
+        <p>Run a research scan to see execution history.</p>
+      </div>
+    </div>
+  </div><!-- /runs-tab -->
+
 </div>
 
 <script>
@@ -1164,8 +1294,181 @@
     if (e.key === 'Escape') closeModal();
   });
 
+  // ---- Tab switching ----
+  var activeTab = 'products';
+  var runsRefreshInterval = null;
+
+  function switchTab(tab) {
+    activeTab = tab;
+    $$('.tab-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
+    });
+    $$('.tab-content').forEach(function (el) {
+      el.classList.toggle('active', el.id === tab + '-tab');
+    });
+    window.location.hash = tab;
+
+    if (tab === 'runs') {
+      loadRuns();
+      startRunsAutoRefresh();
+    } else {
+      stopRunsAutoRefresh();
+    }
+  }
+
+  $$('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      switchTab(btn.getAttribute('data-tab'));
+    });
+  });
+
+  // ---- Runs data ----
+  var allRuns = [];
+  var expandedRunId = null;
+
+  function sourceClass(src) {
+    if (src === 'research') return 'source-research';
+    if (src === 'nightly') return 'source-nightly';
+    if (src === 'manual') return 'source-manual';
+    return 'source-unknown';
+  }
+
+  async function loadRuns() {
+    try {
+      var data = await apiFetch('/api/runs?limit=50');
+      allRuns = data.runs || [];
+      renderRuns();
+    } catch (e) {
+      showToast('Failed to load runs: ' + e.message);
+    }
+  }
+
+  function renderRuns() {
+    var tbody = $('#runs-tbody');
+    var emptyEl = $('#runs-empty');
+
+    if (allRuns.length === 0) {
+      tbody.innerHTML = '';
+      emptyEl.style.display = 'block';
+      return;
+    }
+
+    emptyEl.style.display = 'none';
+    var html = '';
+    allRuns.forEach(function (r) {
+      var isExpanded = expandedRunId === r.id;
+      html += '<tr class="run-row' + (isExpanded ? ' expanded' : '') + '" data-run-id="' + r.id + '">'
+        + '<td><span class="expand-arrow">' + (isExpanded ? '&#9656;' : '&#9656;') + '</span></td>'
+        + '<td class="num">' + r.id + '</td>'
+        + '<td>' + esc(fmtRunTimestamp(r.timestamp)) + '</td>'
+        + '<td><span class="source-badge ' + sourceClass(r.source) + '">' + esc(r.source || 'unknown') + '</span></td>'
+        + '<td class="num">' + (r.total_asins || 0) + '</td>'
+        + '<td class="num">' + (r.approved_count || 0) + '</td>'
+        + '<td class="num">' + (r.restricted_count || 0) + '</td>'
+        + '<td>' + esc(r.notes || '--') + '</td>'
+        + '</tr>';
+
+      if (isExpanded) {
+        html += '<tr class="run-detail-row" data-run-detail="' + r.id + '">'
+          + '<td colspan="8"><div class="run-detail-content" id="run-detail-' + r.id + '">Loading...</div></td>'
+          + '</tr>';
+      }
+    });
+    tbody.innerHTML = html;
+
+    // If a row is expanded, load its detail
+    if (expandedRunId !== null) {
+      loadRunDetail(expandedRunId);
+    }
+  }
+
+  function fmtRunTimestamp(ts) {
+    if (!ts) return '--';
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return ts;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function loadRunDetail(runId) {
+    var container = $('#run-detail-' + runId);
+    if (!container) return;
+
+    try {
+      var data = await apiFetch('/api/run/' + runId);
+      var snaps = data.snapshots || [];
+      if (snaps.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-muted);padding:12px;">No ASIN snapshots in this run.</p>';
+        return;
+      }
+
+      var html = '<table style="width:100%"><thead><tr>'
+        + '<th>ASIN</th><th>Title</th><th>Grade</th><th>Score</th>'
+        + '<th>ROI%</th><th>Price</th><th>BSR</th><th>Restricted</th>'
+        + '</tr></thead><tbody>';
+      snaps.forEach(function (s) {
+        html += '<tr>'
+          + '<td><a class="asin-link" href="https://www.amazon.com/dp/' + esc(s.asin) + '" target="_blank" rel="noopener">' + esc(s.asin) + '</a></td>'
+          + '<td class="title-cell" title="' + esc(s.title || '') + '">' + esc(truncate(s.title, 35)) + '</td>'
+          + '<td><span class="grade-badge ' + gradeClass(s.grade) + '">' + esc(s.grade || '-') + '</span></td>'
+          + '<td class="num">' + fmt(s.score, 1) + '</td>'
+          + '<td class="num">' + fmt(s.roi, 1) + '%</td>'
+          + '<td class="num">' + fmtCurrency(s.buy_box_price) + '</td>'
+          + '<td class="num">' + fmtInt(s.bsr) + '</td>'
+          + '<td>' + (s.restricted ? '<span class="restricted-yes">Restricted</span>' : '<span class="restricted-no">Approved</span>') + '</td>'
+          + '</tr>';
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    } catch (e) {
+      container.innerHTML = '<p style="color:var(--red);padding:12px;">Error loading run detail: ' + esc(e.message) + '</p>';
+    }
+  }
+
+  // Run row click -> toggle expand
+  $('#runs-tbody').addEventListener('click', function (e) {
+    var row = e.target.closest('tr.run-row');
+    if (!row) return;
+    var runId = parseInt(row.getAttribute('data-run-id'), 10);
+    if (expandedRunId === runId) {
+      expandedRunId = null;
+    } else {
+      expandedRunId = runId;
+    }
+    renderRuns();
+  });
+
+  // Auto-refresh for runs tab
+  function startRunsAutoRefresh() {
+    stopRunsAutoRefresh();
+    runsRefreshInterval = setInterval(function () {
+      if (activeTab === 'runs') loadRuns();
+    }, 30000);
+  }
+
+  function stopRunsAutoRefresh() {
+    if (runsRefreshInterval) {
+      clearInterval(runsRefreshInterval);
+      runsRefreshInterval = null;
+    }
+  }
+
+  // ---- URL hash routing ----
+  function handleHash() {
+    var hash = window.location.hash.replace('#', '');
+    if (hash === 'runs' || hash === 'products') {
+      switchTab(hash);
+    }
+  }
+  window.addEventListener('hashchange', handleHash);
+
   // ---- Initial load ----
   loadData();
+
+  // Check URL hash for initial tab
+  if (window.location.hash === '#runs') {
+    switchTab('runs');
+  }
 
 })();
 </script>

@@ -13,6 +13,7 @@ Usage:
     python3 research_db.py export-runs [--limit N]
     python3 research_db.py export-stats [--from DATE] [--to DATE]
     python3 research_db.py export-history <ASIN>
+    python3 research_db.py export-run-detail <run_id>
 """
 
 import json
@@ -479,6 +480,40 @@ def cmd_export_history():
     out({"asin": asin, "snapshots": snapshots})
 
 
+def cmd_export_run_detail():
+    """Return run metadata + all ASIN snapshots for a single run."""
+    if len(sys.argv) < 3:
+        err("export-run-detail requires a run_id argument")
+
+    try:
+        run_id = int(sys.argv[2])
+    except ValueError:
+        err("run_id must be an integer")
+
+    with get_db() as conn:
+        run_row = conn.execute(
+            "SELECT * FROM research_runs WHERE id = ?", (run_id,)
+        ).fetchone()
+        if not run_row:
+            err(f"Run {run_id} not found")
+
+        rows = conn.execute(
+            """SELECT s.asin, p.title, p.category,
+                      s.buy_box_price, s.bsr, s.roi, s.score, s.grade,
+                      s.restricted, s.restriction_reasons,
+                      s.profit, s.margin, s.estimated_monthly_sales,
+                      s.fba_offer_count, s.amazon_is_seller, s.timestamp
+               FROM asin_snapshots s
+               JOIN products p ON s.asin = p.asin
+               WHERE s.run_id = ?
+               ORDER BY s.score DESC NULLS LAST""",
+            (run_id,),
+        ).fetchall()
+        snapshots = [dict(row) for row in rows]
+
+    out({"run": dict(run_row), "snapshots": snapshots})
+
+
 # ─── Main ─────────────────────────────────────────────────────
 
 def main():
@@ -502,6 +537,8 @@ def main():
             cmd_export_stats()
         elif cmd == "export-history":
             cmd_export_history()
+        elif cmd == "export-run-detail":
+            cmd_export_run_detail()
         else:
             err(f"Unknown command: {cmd}")
     except SystemExit:
