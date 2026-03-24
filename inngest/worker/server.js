@@ -4,10 +4,15 @@ const { inngest } = require("./lib/inngest");
 const { functions: researchFunctions } = require("./functions/research");
 const { checkRestrictions, nightlyAsinAudit } = require("./functions/restrictions");
 
+const apiRoutes = require("./routes/api");
+
 const app = express();
 const PORT = process.env.PORT || 3500;
 
 app.use(express.json());
+
+// Dashboard & API routes (before Inngest so /api/products etc. take priority)
+app.use(apiRoutes);
 
 // Health check
 app.get("/health", (req, res) => {
