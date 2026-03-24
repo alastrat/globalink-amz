@@ -152,6 +152,7 @@ jobs:
             -v /opt/nanoclaw/store:/opt/nanoclaw/store \
             -v /opt/nanoclaw/data:/opt/nanoclaw/data \
             -v /opt/nanoclaw/groups:/opt/nanoclaw/groups \
+            -v /opt/nanoclaw/.env:/opt/nanoclaw/.env:ro \
             ${NANOCLAW_IMAGE}
 
           docker image prune -f
