@@ -30,6 +30,14 @@ app.use(
   })
 );
 
+const { execTool } = require("./lib/tools");
+try {
+  execTool("research_db.py", ["init"], { timeout: 5000 });
+  console.log("Research database initialized");
+} catch (err) {
+  console.warn("Could not initialize research DB:", err.message);
+}
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`FBA Inngest worker listening on port ${PORT}`);
   console.log(`Inngest endpoint: http://0.0.0.0:${PORT}/api/inngest`);

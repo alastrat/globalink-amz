@@ -218,6 +218,16 @@ const researchProduct = inngest.createFunction(
       }
     });
 
+    await step.run("save-to-db", () => {
+      execTool("research_db.py", [
+        "save-research",
+        JSON.stringify({
+          source: "research",
+          products: results,
+        }),
+      ]);
+    });
+
     return {
       products: results.length,
       top_roi: results[0]?.roi,

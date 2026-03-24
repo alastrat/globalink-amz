@@ -72,6 +72,17 @@ const checkRestrictions = inngest.createFunction(
       sendProgress(lines.join("\n"));
     });
 
+    await step.run("save-to-db", () => {
+      execTool("research_db.py", [
+        "save-restrictions",
+        JSON.stringify({
+          source: "manual",
+          approved: result.approved || [],
+          restricted: result.restricted || {},
+        }),
+      ]);
+    });
+
     return result;
   }
 );
@@ -146,6 +157,15 @@ const nightlyAsinAudit = inngest.createFunction(
       } catch (err) {
         console.error("Error saving audit results:", err.message);
       }
+
+      execTool("research_db.py", [
+        "save-restrictions",
+        JSON.stringify({
+          source: "nightly",
+          approved: result.approved || [],
+          restricted: result.restricted || {},
+        }),
+      ]);
 
       return { newlyApproved, newlyRestricted };
     });
