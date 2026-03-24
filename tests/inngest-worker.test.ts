@@ -8,55 +8,67 @@ import fs from "node:fs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_DIR = path.join(__dirname, "..", "inngest", "worker");
 
+// Tests that require `inngest` npm package (only available when worker deps are installed)
+const hasInngestDeps = fs.existsSync(
+  path.join(WORKER_DIR, "node_modules", "inngest")
+);
+
+function requireWorkerModule(evalCode: string): string {
+  return execSync(`node -e "${evalCode}"`, {
+    cwd: WORKER_DIR,
+    encoding: "utf-8",
+  }).trim();
+}
+
 describe("inngest worker module syntax", () => {
-  it("lib/inngest.js is valid and exports inngest client", () => {
-    const result = execSync(
-      `node -e "const m = require('./lib/inngest'); console.log(JSON.stringify({ hasInngest: !!m.inngest, id: m.inngest?.id }))"`,
-      { cwd: WORKER_DIR, encoding: "utf-8" }
+  it("lib/inngest.js is valid and exports inngest client", { skip: !hasInngestDeps && "inngest deps not installed" }, () => {
+    const data = JSON.parse(
+      requireWorkerModule(
+        "const m = require('./lib/inngest'); console.log(JSON.stringify({ hasInngest: !!m.inngest, id: m.inngest?.id }))"
+      )
     );
-    const data = JSON.parse(result.trim());
     assert.strictEqual(data.hasInngest, true);
     assert.strictEqual(data.id, "fba-worker");
   });
 
   it("lib/tools.js is valid and exports execTool", () => {
-    const result = execSync(
-      `node -e "const m = require('./lib/tools'); console.log(JSON.stringify({ hasExecTool: typeof m.execTool === 'function' }))"`,
-      { cwd: WORKER_DIR, encoding: "utf-8" }
+    const data = JSON.parse(
+      requireWorkerModule(
+        "const m = require('./lib/tools'); console.log(JSON.stringify({ hasExecTool: typeof m.execTool === 'function' }))"
+      )
     );
-    const data = JSON.parse(result.trim());
     assert.strictEqual(data.hasExecTool, true);
   });
 
   it("lib/ipc.js is valid and exports sendProgress, sendImage, sendProductCard", () => {
-    const result = execSync(
-      `node -e "const m = require('./lib/ipc'); console.log(JSON.stringify({ sendProgress: typeof m.sendProgress, sendImage: typeof m.sendImage, sendProductCard: typeof m.sendProductCard }))"`,
-      { cwd: WORKER_DIR, encoding: "utf-8" }
+    const data = JSON.parse(
+      requireWorkerModule(
+        "const m = require('./lib/ipc'); console.log(JSON.stringify({ sendProgress: typeof m.sendProgress, sendImage: typeof m.sendImage, sendProductCard: typeof m.sendProductCard }))"
+      )
     );
-    const data = JSON.parse(result.trim());
     assert.strictEqual(data.sendProgress, "function");
     assert.strictEqual(data.sendImage, "function");
     assert.strictEqual(data.sendProductCard, "function");
   });
 
-  it("functions/research.js exports functions array", () => {
-    const result = execSync(
-      `node -e "const m = require('./functions/research'); console.log(JSON.stringify({ hasFunctions: Array.isArray(m.functions), count: m.functions?.length }))"`,
-      { cwd: WORKER_DIR, encoding: "utf-8" }
+  it("functions/research.js exports functions array", { skip: !hasInngestDeps && "inngest deps not installed" }, () => {
+    const data = JSON.parse(
+      requireWorkerModule(
+        "const m = require('./functions/research'); console.log(JSON.stringify({ hasFunctions: Array.isArray(m.functions), count: m.functions?.length }))"
+      )
     );
-    const data = JSON.parse(result.trim());
     assert.strictEqual(data.hasFunctions, true);
     assert.strictEqual(data.count, 1);
   });
 
-  it("functions/restrictions.js exports checkRestrictions and nightlyAsinAudit", () => {
-    const result = execSync(
-      `node -e "const m = require('./functions/restrictions'); console.log(JSON.stringify({ hasCheck: typeof m.checkRestrictions === 'object', hasNightly: typeof m.nightlyAsinAudit === 'object' }))"`,
-      { cwd: WORKER_DIR, encoding: "utf-8" }
+  it("functions/restrictions.js exports checkRestrictions and nightlyAsinAudit", { skip: !hasInngestDeps && "inngest deps not installed" }, () => {
+    const data = JSON.parse(
+      requireWorkerModule(
+        "const m = require('./functions/restrictions'); console.log(JSON.stringify({ hasCheck: typeof m.checkRestrictions === 'object', hasNightly: typeof m.nightlyAsinAudit === 'object' }))"
+      )
     );
-    const data = JSON.parse(result.trim());
-    assert.strictEqual(data.hasCheck, true, "checkRestrictions should be exported");
-    assert.strictEqual(data.hasNightly, true, "nightlyAsinAudit should be exported");
+    assert.strictEqual(data.hasCheck, true);
+    assert.strictEqual(data.hasNightly, true);
   });
 });
 
@@ -82,22 +94,14 @@ describe("inngest worker file structure", () => {
 });
 
 describe("execTool timeout parameter", () => {
-  it("respects custom timeout (short timeout causes failure on slow script)", () => {
-    // Create a script that sleeps, call with very short timeout
-    const result = execSync(
-      `node -e "
+  it("respects custom timeout", () => {
+    const data = JSON.parse(
+      requireWorkerModule(`
         const { execTool } = require('./lib/tools');
-        try {
-          execTool('nonexistent_script_12345.py', [], { timeout: 100 });
-        } catch(e) {
-          // execTool catches and returns error object
-        }
-        // Verify it accepted the timeout param without throwing TypeError
+        try { execTool('nonexistent_12345.py', [], { timeout: 100 }); } catch(e) {}
         console.log(JSON.stringify({ ok: true }));
-      "`,
-      { cwd: WORKER_DIR, encoding: "utf-8" }
+      `)
     );
-    const data = JSON.parse(result.trim());
     assert.strictEqual(data.ok, true);
   });
 });
