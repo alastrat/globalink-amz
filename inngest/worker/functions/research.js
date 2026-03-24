@@ -1,8 +1,6 @@
-const { Inngest } = require("inngest");
+const { inngest } = require("../lib/inngest");
 const { execTool } = require("../lib/tools");
 const { sendProgress, sendProductCard } = require("../lib/ipc");
-
-const inngest = new Inngest({ id: "fba-worker" });
 
 const PREP_COST = 1.5;
 const SHIPPING_PER_UNIT = 0.5;
@@ -228,4 +226,4 @@ const researchProduct = inngest.createFunction(
   }
 );
 
-module.exports = { inngest, functions: [researchProduct] };
+module.exports = { functions: [researchProduct] };

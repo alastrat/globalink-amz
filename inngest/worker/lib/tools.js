@@ -6,16 +6,18 @@ const TOOLS_DIR = process.env.TOOLS_DIR || "/tools";
  * Execute a Python tool script and return parsed JSON output.
  * @param {string} script - Script filename (e.g., "sp-api-query.py")
  * @param {string[]} args - Command arguments
+ * @param {object} [opts] - Options
+ * @param {number} [opts.timeout=60000] - Timeout in ms
  * @returns {object} Parsed JSON output
  */
-function execTool(script, args = []) {
+function execTool(script, args = [], { timeout = 60000 } = {}) {
   const escapedArgs = args.map((a) => `'${String(a).replace(/'/g, "'\\''")}'`);
   const cmd = `python3 ${TOOLS_DIR}/${script} ${escapedArgs.join(" ")}`;
 
   try {
     const result = execSync(cmd, {
       encoding: "utf-8",
-      timeout: 60000, // 60s timeout per tool call
+      timeout,
       env: { ...process.env, PYTHONIOENCODING: "utf-8" },
     });
 

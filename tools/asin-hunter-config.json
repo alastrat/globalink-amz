@@ -1,0 +1,29 @@
+{
+  "filters": {
+    "min_price": 20,
+    "max_price": 50,
+    "max_bsr": 100000,
+    "min_roi_pct": 35,
+    "min_monthly_sales": 100,
+    "min_fba_sellers": 3,
+    "max_fba_sellers": 15,
+    "size_tier": ["small_standard", "large_standard"],
+    "excluded_categories": ["Grocery & Gourmet Food"],
+    "min_review_rating": 3.5,
+    "max_weight_lb": 3.0,
+    "min_price_stability_pct": 85
+  },
+  "costs": {
+    "prep_center_per_unit": 1.50,
+    "inbound_shipping_per_unit": 0.40,
+    "budget": 1000,
+    "reserve_for_prep_pct": 20
+  },
+  "search_keywords": [
+    "health supplements",
+    "office supplies",
+    "beauty accessories",
+    "pet supplies",
+    "kitchen gadgets"
+  ]
+}

@@ -1,6 +1,8 @@
 const express = require("express");
 const { serve } = require("inngest/express");
-const { inngest, functions } = require("./functions/research");
+const { inngest } = require("./lib/inngest");
+const { functions: researchFunctions } = require("./functions/research");
+const { checkRestrictions, nightlyAsinAudit } = require("./functions/restrictions");
 
 const app = express();
 const PORT = process.env.PORT || 3500;
@@ -12,12 +14,14 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Inngest endpoint
+// Inngest endpoint — register all functions
+const allFunctions = [...researchFunctions, checkRestrictions, nightlyAsinAudit];
+
 app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions,
+    functions: allFunctions,
   })
 );
 
