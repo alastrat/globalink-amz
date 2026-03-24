@@ -81,7 +81,7 @@ jobs:
           tar czf /tmp/deploy.tar.gz \
             docker-compose.yml \
             config/CLAUDE.md \
-            tools/*.py \
+            tools/*.py tools/*.json tools/*.txt \
             inngest/worker/lib/*.js \
             inngest/worker/functions/*.js
 
@@ -110,7 +110,7 @@ jobs:
           cd /tmp && tar xzf deploy.tar.gz
           cp docker-compose.yml /opt/globalink-fba/
           cp config/CLAUDE.md /opt/nanoclaw/groups/owner/CLAUDE.md
-          cp tools/*.py /opt/nanoclaw/groups/owner/tools/
+          cp tools/*.py tools/*.json tools/*.txt /opt/nanoclaw/groups/owner/tools/
           mkdir -p /opt/inngest/worker/lib /opt/inngest/worker/functions
           cp inngest/worker/lib/*.js /opt/inngest/worker/lib/
           cp inngest/worker/functions/*.js /opt/inngest/worker/functions/
