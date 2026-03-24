@@ -83,7 +83,9 @@ jobs:
             config/CLAUDE.md \
             tools/*.py tools/*.json tools/*.txt \
             inngest/worker/lib/*.js \
-            inngest/worker/functions/*.js
+            inngest/worker/functions/*.js \
+            inngest/worker/dashboard/*.html \
+            inngest/worker/routes/*.js
 
           # Create deploy script with rollback safety
           cat > /tmp/deploy.sh << 'SCRIPT'
@@ -111,9 +113,11 @@ jobs:
           cp docker-compose.yml /opt/globalink-fba/
           cp config/CLAUDE.md /opt/nanoclaw/groups/owner/CLAUDE.md
           cp tools/*.py tools/*.json tools/*.txt /opt/nanoclaw/groups/owner/tools/
-          mkdir -p /opt/inngest/worker/lib /opt/inngest/worker/functions
+          mkdir -p /opt/inngest/worker/lib /opt/inngest/worker/functions /opt/inngest/worker/dashboard /opt/inngest/worker/routes
           cp inngest/worker/lib/*.js /opt/inngest/worker/lib/
           cp inngest/worker/functions/*.js /opt/inngest/worker/functions/
+          cp inngest/worker/dashboard/*.html /opt/inngest/worker/dashboard/
+          cp inngest/worker/routes/*.js /opt/inngest/worker/routes/
           rm -rf /tmp/deploy.tar.gz /tmp/deploy.sh /tmp/docker-compose.yml /tmp/config /tmp/tools /tmp/inngest
 
           # Docker login to GHCR
