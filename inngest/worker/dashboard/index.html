@@ -1,5 +1,1173 @@
 <!DOCTYPE html>
-<html>
-<head><title>FBA Dashboard</title></head>
-<body><h1>Dashboard placeholder</h1></body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASIN Hunter Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d29;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --text-bright: #f0f6fc;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --link: #58a6ff;
+      --green: #238636;
+      --blue: #388bfd;
+      --yellow: #d29922;
+      --red: #da3633;
+      --gray: #6e7681;
+      --mono: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container { max-width: 1440px; margin: 0 auto; padding: 16px; }
+
+    /* ---- Header ---- */
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header h1 { font-size: 22px; color: var(--text-bright); white-space: nowrap; }
+    .header-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .header-controls input[type="date"] {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: var(--mono);
+    }
+    .header-controls input[type="date"]:focus { outline: none; border-color: var(--accent); }
+
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 7px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: var(--border); }
+    .btn-secondary:hover { background: #484f58; }
+
+    /* ---- Loading overlay ---- */
+    .loading-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,17,23,0.85);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.2s;
+    }
+    .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: var(--red); color: #fff;
+      padding: 12px 20px; border-radius: 8px;
+      font-size: 14px; z-index: 1001;
+      transform: translateY(100px); opacity: 0;
+      transition: all 0.3s;
+      max-width: 360px;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ---- KPI Cards ---- */
+    .kpi-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      padding-bottom: 4px;
+    }
+    .kpi-card {
+      flex: 1 0 140px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      min-width: 140px;
+    }
+    .kpi-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+    .kpi-value {
+      font-size: 26px;
+      font-weight: 700;
+      font-family: var(--mono);
+      color: var(--link);
+    }
+
+    /* ---- Filter Bar ---- */
+    .filter-bar {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .filter-group { display: flex; flex-direction: column; flex: 1; min-width: 130px; }
+    .filter-group label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    .filter-group select,
+    .filter-group input[type="text"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .filter-group select:focus,
+    .filter-group input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+    }
+
+    /* ---- Charts ---- */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .chart-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+    }
+    .chart-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin-bottom: 10px;
+    }
+    .chart-card canvas { width: 100% !important; max-height: 280px; }
+
+    /* ---- Product Table ---- */
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .table-header h2 { font-size: 16px; color: var(--text-bright); }
+    .table-count { font-size: 13px; color: var(--text-muted); font-family: var(--mono); }
+
+    .table-wrapper {
+      overflow-x: auto;
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    table { width: 100%; border-collapse: collapse; background: var(--card); }
+    thead { background: var(--bg); }
+    th {
+      padding: 12px 14px;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      position: relative;
+    }
+    th:hover { background: #161b22; }
+    th .sort-arrow { margin-left: 4px; font-size: 10px; opacity: 0.4; }
+    th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+    td {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    td.num { font-family: var(--mono); text-align: right; }
+    tbody tr { cursor: pointer; transition: background 0.1s; }
+    tbody tr:hover { background: rgba(99,102,241,0.06); }
+
+    .grade-badge {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-weight: 700;
+      font-size: 12px;
+      color: #fff;
+    }
+    .grade-a { background: var(--green); }
+    .grade-b { background: var(--blue); }
+    .grade-c { background: var(--yellow); }
+    .grade-d { background: var(--red); }
+    .grade-f { background: var(--gray); }
+
+    .restricted-yes { color: var(--red); font-weight: 600; }
+    .restricted-no { color: var(--green); font-weight: 600; }
+
+    .asin-link {
+      color: var(--link);
+      text-decoration: none;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .asin-link:hover { text-decoration: underline; }
+
+    .title-cell {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+    .empty-state p { margin-top: 8px; }
+
+    /* ---- Modal ---- */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,17,23,0.9);
+      z-index: 900;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-width: 800px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 24px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .modal-header h2 { font-size: 18px; color: var(--text-bright); }
+    .modal-header .asin-link { font-size: 14px; }
+    .modal-close {
+      background: none; border: none;
+      color: var(--text-muted); font-size: 24px;
+      cursor: pointer; padding: 0 4px;
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--text-bright); }
+    .modal-charts {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    .modal-chart-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .modal-chart-card h4 {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .modal-chart-card canvas { width: 100% !important; max-height: 200px; }
+    .modal-no-history {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+    }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 768px) {
+      .container { padding: 12px; }
+      .header { flex-direction: column; align-items: flex-start; }
+      .header h1 { font-size: 18px; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .kpi-card { min-width: 120px; padding: 12px; }
+      .kpi-value { font-size: 20px; }
+      .filter-bar { flex-direction: column; }
+      .filter-group { min-width: 100%; }
+      .modal { padding: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      .header-controls { width: 100%; }
+      .header-controls input[type="date"] { flex: 1; min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+</div>
+
+<!-- Error toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ASIN History Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="modal-title">Product History</h2>
+        <a id="modal-asin-link" class="asin-link" href="#" target="_blank" rel="noopener"></a>
+      </div>
+      <button class="modal-close" id="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="modal-body">
+      <div class="modal-charts">
+        <div class="modal-chart-card">
+          <h4>Buy Box Price</h4>
+          <canvas id="chart-history-price"></canvas>
+        </div>
+        <div class="modal-chart-card">
+          <h4>Best Sellers Rank</h4>
+          <canvas id="chart-history-bsr"></canvas>
+        </div>
+        <div class="modal-chart-card">
+          <h4>ROI %</h4>
+          <canvas id="chart-history-roi"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>ASIN Hunter Dashboard</h1>
+    <div class="header-controls">
+      <input type="date" id="date-from" title="From date">
+      <input type="date" id="date-to" title="To date">
+      <button class="btn" id="btn-refresh">Refresh</button>
+      <button class="btn btn-secondary" id="btn-export">Export CSV</button>
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Products</div>
+      <div class="kpi-value" id="kpi-total">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Approved %</div>
+      <div class="kpi-value" id="kpi-approved">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg ROI %</div>
+      <div class="kpi-value" id="kpi-roi">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg Score</div>
+      <div class="kpi-value" id="kpi-score">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg Profit</div>
+      <div class="kpi-value" id="kpi-profit">--</div>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label for="filter-category">Category</label>
+      <select id="filter-category"><option value="">All Categories</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="filter-grade">Grade</label>
+      <select id="filter-grade">
+        <option value="">All Grades</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+        <option value="D">D</option>
+        <option value="F">F</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="filter-restricted">Restriction</label>
+      <select id="filter-restricted">
+        <option value="">All</option>
+        <option value="0">Approved</option>
+        <option value="1">Restricted</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="filter-search">Search</label>
+      <input type="text" id="filter-search" placeholder="ASIN or title...">
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>ROI vs Price</h3>
+      <canvas id="chart-scatter"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Grade Distribution</h3>
+      <canvas id="chart-grades"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Restriction Status</h3>
+      <canvas id="chart-restrictions"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Top 10 by ROI</h3>
+      <canvas id="chart-top-roi"></canvas>
+    </div>
+  </div>
+
+  <!-- Product Table -->
+  <div class="table-header">
+    <h2>Products</h2>
+    <span class="table-count" id="table-count"></span>
+  </div>
+  <div class="table-wrapper">
+    <table id="product-table">
+      <thead>
+        <tr>
+          <th data-key="grade">Grade <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="score">Score <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="asin">ASIN <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="title">Title <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="category">Category <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="buy_box_price">Price <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="bsr">BSR <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="roi">ROI% <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="profit">Profit <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="restricted">Restricted <span class="sort-arrow">&#9650;</span></th>
+          <th data-key="timestamp">Updated <span class="sort-arrow">&#9650;</span></th>
+        </tr>
+      </thead>
+      <tbody id="product-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="empty-state" style="display:none;">
+      <p><strong>No data yet</strong></p>
+      <p>Run a research scan to populate the dashboard.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---- State ----
+  let allProducts = [];
+  let filteredProducts = [];
+  let sortKey = 'score';
+  let sortDir = -1; // -1 = desc
+  let charts = {};
+  let historyCharts = {};
+
+  // ---- DOM refs ----
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  const elLoading = $('#loading');
+  const elToast = $('#toast');
+  const elDateFrom = $('#date-from');
+  const elDateTo = $('#date-to');
+  const elFilterCategory = $('#filter-category');
+  const elFilterGrade = $('#filter-grade');
+  const elFilterRestricted = $('#filter-restricted');
+  const elFilterSearch = $('#filter-search');
+  const elTbody = $('#product-tbody');
+  const elEmptyState = $('#empty-state');
+  const elTableCount = $('#table-count');
+  const elModalOverlay = $('#modal-overlay');
+  const elModal = $('#modal');
+  const elModalTitle = $('#modal-title');
+  const elModalAsinLink = $('#modal-asin-link');
+  const elModalClose = $('#modal-close');
+
+  // ---- Defaults: last 30 days ----
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  elDateFrom.value = toDateStr(thirtyDaysAgo);
+  elDateTo.value = toDateStr(now);
+
+  // ---- Utilities ----
+  function toDateStr(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  function showLoading() { elLoading.classList.remove('hidden'); }
+  function hideLoading() { elLoading.classList.add('hidden'); }
+
+  function showToast(msg, duration) {
+    duration = duration || 4000;
+    elToast.textContent = msg;
+    elToast.classList.add('show');
+    setTimeout(function () { elToast.classList.remove('show'); }, duration);
+  }
+
+  async function apiFetch(url) {
+    var resp = await fetch(url);
+    if (!resp.ok) {
+      var body;
+      try { body = await resp.json(); } catch (e) { body = {}; }
+      throw new Error(body.error || 'API error ' + resp.status);
+    }
+    return resp.json();
+  }
+
+  function fmt(n, decimals) {
+    if (n == null || isNaN(n)) return '--';
+    decimals = decimals != null ? decimals : 1;
+    return Number(n).toFixed(decimals);
+  }
+
+  function fmtCurrency(n) {
+    if (n == null || isNaN(n)) return '--';
+    return '$' + Number(n).toFixed(2);
+  }
+
+  function fmtInt(n) {
+    if (n == null || isNaN(n)) return '--';
+    return Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  }
+
+  function fmtDate(ts) {
+    if (!ts) return '--';
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return ts;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function gradeClass(g) {
+    if (!g) return '';
+    return 'grade-' + g.toLowerCase();
+  }
+
+  var GRADE_ORDER = { A: 1, B: 2, C: 3, D: 4, F: 5 };
+
+  // ---- Data fetching ----
+  async function loadData() {
+    showLoading();
+    var from = elDateFrom.value;
+    var to = elDateTo.value;
+    var qp = '';
+    if (from) qp += '&from=' + from;
+    if (to) qp += '&to=' + to;
+    if (qp) qp = '?' + qp.slice(1);
+
+    try {
+      var results = await Promise.all([
+        apiFetch('/api/stats' + qp),
+        apiFetch('/api/products' + qp)
+      ]);
+      var stats = results[0];
+      var prodData = results[1];
+
+      allProducts = (prodData.products || []);
+
+      populateKPIs(stats);
+      populateCategoryFilter();
+      applyFilters();
+    } catch (err) {
+      showToast('Failed to load data: ' + err.message);
+      allProducts = [];
+      applyFilters();
+    } finally {
+      hideLoading();
+    }
+  }
+
+  // ---- KPIs ----
+  function populateKPIs(stats) {
+    $('#kpi-total').textContent = fmtInt(stats.total_products || 0);
+
+    var approvedPct = 0;
+    if (stats.total_products > 0) {
+      approvedPct = ((stats.approved_count || 0) / stats.total_products * 100);
+    }
+    $('#kpi-approved').textContent = fmt(approvedPct, 0) + '%';
+
+    $('#kpi-roi').textContent = fmt(stats.avg_roi, 1) + '%';
+    $('#kpi-score').textContent = fmt(stats.avg_score, 1);
+
+    // Compute avg profit from products
+    var totalProfit = 0;
+    var profitCount = 0;
+    allProducts.forEach(function (p) {
+      if (p.profit != null && !isNaN(p.profit)) {
+        totalProfit += Number(p.profit);
+        profitCount++;
+      }
+    });
+    var avgProfit = profitCount > 0 ? totalProfit / profitCount : 0;
+    $('#kpi-profit').textContent = fmtCurrency(avgProfit);
+  }
+
+  // ---- Category filter population ----
+  function populateCategoryFilter() {
+    var cats = {};
+    allProducts.forEach(function (p) {
+      if (p.category) cats[p.category] = true;
+    });
+    var sorted = Object.keys(cats).sort();
+    elFilterCategory.innerHTML = '<option value="">All Categories</option>';
+    sorted.forEach(function (c) {
+      var opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      elFilterCategory.appendChild(opt);
+    });
+  }
+
+  // ---- Filtering ----
+  function applyFilters() {
+    var cat = elFilterCategory.value;
+    var grade = elFilterGrade.value;
+    var restricted = elFilterRestricted.value;
+    var search = (elFilterSearch.value || '').toLowerCase().trim();
+
+    filteredProducts = allProducts.filter(function (p) {
+      if (cat && p.category !== cat) return false;
+      if (grade && p.grade !== grade) return false;
+      if (restricted === '0' && p.restricted) return false;
+      if (restricted === '1' && !p.restricted) return false;
+      if (search) {
+        var asin = (p.asin || '').toLowerCase();
+        var title = (p.title || '').toLowerCase();
+        if (asin.indexOf(search) === -1 && title.indexOf(search) === -1) return false;
+      }
+      return true;
+    });
+
+    sortProducts();
+    renderTable();
+    renderCharts();
+  }
+
+  // ---- Sorting ----
+  function sortProducts() {
+    filteredProducts.sort(function (a, b) {
+      var va = a[sortKey];
+      var vb = b[sortKey];
+
+      // Grade special sort
+      if (sortKey === 'grade') {
+        va = GRADE_ORDER[va] || 99;
+        vb = GRADE_ORDER[vb] || 99;
+      }
+      // Restricted bool
+      if (sortKey === 'restricted') {
+        va = va ? 1 : 0;
+        vb = vb ? 1 : 0;
+      }
+      // String compare
+      if (typeof va === 'string' && typeof vb === 'string') {
+        return sortDir * va.localeCompare(vb);
+      }
+      // Null handling
+      if (va == null) va = sortDir > 0 ? Infinity : -Infinity;
+      if (vb == null) vb = sortDir > 0 ? Infinity : -Infinity;
+      return sortDir * (va - vb);
+    });
+  }
+
+  // ---- Table rendering ----
+  function renderTable() {
+    if (filteredProducts.length === 0) {
+      elTbody.innerHTML = '';
+      elEmptyState.style.display = 'block';
+      elTableCount.textContent = '0 products';
+      return;
+    }
+
+    elEmptyState.style.display = 'none';
+    elTableCount.textContent = filteredProducts.length + ' product' + (filteredProducts.length !== 1 ? 's' : '');
+
+    var html = '';
+    filteredProducts.forEach(function (p) {
+      html += '<tr data-asin="' + esc(p.asin) + '">'
+        + '<td><span class="grade-badge ' + gradeClass(p.grade) + '">' + esc(p.grade || '-') + '</span></td>'
+        + '<td class="num">' + fmt(p.score, 1) + '</td>'
+        + '<td><a class="asin-link" href="https://www.amazon.com/dp/' + esc(p.asin) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(p.asin) + '</a></td>'
+        + '<td class="title-cell" title="' + esc(p.title || '') + '">' + esc(truncate(p.title, 40)) + '</td>'
+        + '<td>' + esc(p.category || '--') + '</td>'
+        + '<td class="num">' + fmtCurrency(p.buy_box_price) + '</td>'
+        + '<td class="num">' + fmtInt(p.bsr) + '</td>'
+        + '<td class="num">' + fmt(p.roi, 1) + '%</td>'
+        + '<td class="num">' + fmtCurrency(p.profit) + '</td>'
+        + '<td>' + (p.restricted ? '<span class="restricted-yes">Restricted</span>' : '<span class="restricted-no">Approved</span>') + '</td>'
+        + '<td class="num">' + fmtDate(p.timestamp) + '</td>'
+        + '</tr>';
+    });
+    elTbody.innerHTML = html;
+  }
+
+  function esc(s) {
+    if (s == null) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(s)));
+    return div.innerHTML;
+  }
+
+  function truncate(s, len) {
+    if (!s) return '';
+    return s.length > len ? s.slice(0, len) + '...' : s;
+  }
+
+  // ---- Chart rendering ----
+  var CHART_COLORS = {
+    A: '#238636',
+    B: '#388bfd',
+    C: '#d29922',
+    D: '#da3633',
+    F: '#6e7681'
+  };
+
+  function destroyChart(name) {
+    if (charts[name]) { charts[name].destroy(); charts[name] = null; }
+  }
+
+  function renderCharts() {
+    renderScatterChart();
+    renderGradeChart();
+    renderRestrictionChart();
+    renderTopROIChart();
+  }
+
+  function renderScatterChart() {
+    destroyChart('scatter');
+    var ctx = $('#chart-scatter').getContext('2d');
+    var data = filteredProducts
+      .filter(function (p) { return p.buy_box_price != null && p.roi != null; })
+      .map(function (p) {
+        return { x: Number(p.buy_box_price), y: Number(p.roi), asin: p.asin };
+      });
+
+    charts.scatter = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Products',
+          data: data,
+          backgroundColor: 'rgba(99,102,241,0.6)',
+          borderColor: 'rgba(99,102,241,0.8)',
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                var pt = ctx.raw;
+                return pt.asin + ': $' + pt.x.toFixed(2) + ', ROI ' + pt.y.toFixed(1) + '%';
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Price ($)', color: '#8b949e' },
+            grid: { color: 'rgba(48,54,61,0.5)' },
+            ticks: { color: '#8b949e' }
+          },
+          y: {
+            title: { display: true, text: 'ROI %', color: '#8b949e' },
+            grid: { color: 'rgba(48,54,61,0.5)' },
+            ticks: { color: '#8b949e' }
+          }
+        }
+      }
+    });
+  }
+
+  function renderGradeChart() {
+    destroyChart('grades');
+    var ctx = $('#chart-grades').getContext('2d');
+    var counts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+    filteredProducts.forEach(function (p) {
+      if (p.grade && counts.hasOwnProperty(p.grade)) counts[p.grade]++;
+    });
+    var labels = Object.keys(counts);
+    var values = labels.map(function (k) { return counts[k]; });
+    var colors = labels.map(function (k) { return CHART_COLORS[k]; });
+
+    charts.grades = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderColor: '#1a1d29',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { color: '#c9d1d9', padding: 12, font: { size: 12 } }
+          }
+        }
+      }
+    });
+  }
+
+  function renderRestrictionChart() {
+    destroyChart('restrictions');
+    var ctx = $('#chart-restrictions').getContext('2d');
+    var approved = 0;
+    var restricted = 0;
+    filteredProducts.forEach(function (p) {
+      if (p.restricted) restricted++;
+      else approved++;
+    });
+
+    charts.restrictions = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['Approved', 'Restricted'],
+        datasets: [{
+          data: [approved, restricted],
+          backgroundColor: ['#238636', '#da3633'],
+          borderColor: '#1a1d29',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { color: '#c9d1d9', padding: 12, font: { size: 12 } }
+          }
+        }
+      }
+    });
+  }
+
+  function renderTopROIChart() {
+    destroyChart('topRoi');
+    var ctx = $('#chart-top-roi').getContext('2d');
+    var sorted = filteredProducts
+      .filter(function (p) { return p.roi != null; })
+      .sort(function (a, b) { return (b.roi || 0) - (a.roi || 0); })
+      .slice(0, 10);
+
+    var labels = sorted.map(function (p) { return p.asin; });
+    var values = sorted.map(function (p) { return Number(p.roi); });
+    var bgColors = sorted.map(function (p) { return CHART_COLORS[p.grade] || '#6366f1'; });
+
+    charts.topRoi = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'ROI %',
+          data: values,
+          backgroundColor: bgColors,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'ROI %', color: '#8b949e' },
+            grid: { color: 'rgba(48,54,61,0.5)' },
+            ticks: { color: '#8b949e' }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { color: '#c9d1d9', font: { family: "'SF Mono','Fira Code','Courier New',monospace", size: 11 } }
+          }
+        }
+      }
+    });
+  }
+
+  // ---- ASIN History Modal ----
+  function destroyHistoryChart(name) {
+    if (historyCharts[name]) { historyCharts[name].destroy(); historyCharts[name] = null; }
+  }
+
+  async function openHistory(asin) {
+    elModalTitle.textContent = 'Product History';
+    elModalAsinLink.textContent = asin;
+    elModalAsinLink.href = 'https://www.amazon.com/dp/' + asin;
+    elModalOverlay.classList.add('active');
+
+    destroyHistoryChart('price');
+    destroyHistoryChart('bsr');
+    destroyHistoryChart('roi');
+
+    try {
+      var data = await apiFetch('/api/product/' + asin);
+      var snapshots = data.snapshots || [];
+
+      if (snapshots.length === 0) {
+        $('#modal-body').innerHTML = '<div class="modal-no-history">No historical data available for this ASIN.</div>';
+        return;
+      }
+
+      // Restore chart HTML if it was replaced
+      $('#modal-body').innerHTML =
+        '<div class="modal-charts">'
+        + '<div class="modal-chart-card"><h4>Buy Box Price</h4><canvas id="chart-history-price"></canvas></div>'
+        + '<div class="modal-chart-card"><h4>Best Sellers Rank</h4><canvas id="chart-history-bsr"></canvas></div>'
+        + '<div class="modal-chart-card"><h4>ROI %</h4><canvas id="chart-history-roi"></canvas></div>'
+        + '</div>';
+
+      var labels = snapshots.map(function (s) { return fmtDate(s.timestamp); });
+
+      var lineOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(48,54,61,0.5)' }, ticks: { color: '#8b949e', maxTicksLimit: 8 } },
+          y: { grid: { color: 'rgba(48,54,61,0.5)' }, ticks: { color: '#8b949e' } }
+        },
+        elements: { point: { radius: 3 }, line: { tension: 0.3 } }
+      };
+
+      historyCharts.price = new Chart($('#chart-history-price').getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: snapshots.map(function (s) { return s.buy_box_price; }),
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99,102,241,0.1)',
+            fill: true
+          }]
+        },
+        options: lineOpts
+      });
+
+      historyCharts.bsr = new Chart($('#chart-history-bsr').getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: snapshots.map(function (s) { return s.bsr; }),
+            borderColor: '#d29922',
+            backgroundColor: 'rgba(210,153,34,0.1)',
+            fill: true
+          }]
+        },
+        options: Object.assign({}, lineOpts, {
+          scales: Object.assign({}, lineOpts.scales, {
+            y: Object.assign({}, lineOpts.scales.y, { reverse: true })
+          })
+        })
+      });
+
+      historyCharts.roi = new Chart($('#chart-history-roi').getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: snapshots.map(function (s) { return s.roi; }),
+            borderColor: '#238636',
+            backgroundColor: 'rgba(35,134,54,0.1)',
+            fill: true
+          }]
+        },
+        options: lineOpts
+      });
+
+    } catch (err) {
+      $('#modal-body').innerHTML = '<div class="modal-no-history">Error loading history: ' + esc(err.message) + '</div>';
+    }
+  }
+
+  function closeModal() {
+    elModalOverlay.classList.remove('active');
+    destroyHistoryChart('price');
+    destroyHistoryChart('bsr');
+    destroyHistoryChart('roi');
+  }
+
+  // ---- CSV Export ----
+  function exportCSV() {
+    if (filteredProducts.length === 0) {
+      showToast('No products to export');
+      return;
+    }
+
+    var cols = ['asin','title','brand','category','grade','score','buy_box_price','bsr','roi','profit','margin','restricted','restriction_reasons','estimated_monthly_sales','demand_indicator','fba_offer_count','timestamp'];
+    var rows = [cols.join(',')];
+
+    filteredProducts.forEach(function (p) {
+      var row = cols.map(function (c) {
+        var v = p[c];
+        if (v == null) return '';
+        v = String(v);
+        // Escape CSV
+        if (v.indexOf(',') !== -1 || v.indexOf('"') !== -1 || v.indexOf('\n') !== -1) {
+          v = '"' + v.replace(/"/g, '""') + '"';
+        }
+        return v;
+      });
+      rows.push(row.join(','));
+    });
+
+    var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'asin-hunter-export-' + toDateStr(new Date()) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ---- Event listeners ----
+
+  // Refresh button & date changes
+  $('#btn-refresh').addEventListener('click', loadData);
+
+  // Export
+  $('#btn-export').addEventListener('click', exportCSV);
+
+  // Filters (instant, no API call)
+  elFilterCategory.addEventListener('change', applyFilters);
+  elFilterGrade.addEventListener('change', applyFilters);
+  elFilterRestricted.addEventListener('change', applyFilters);
+
+  var searchTimeout;
+  elFilterSearch.addEventListener('input', function () {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(applyFilters, 200);
+  });
+
+  // Table sorting
+  $$('#product-table th[data-key]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = th.getAttribute('data-key');
+      if (sortKey === key) {
+        sortDir = sortDir * -1;
+      } else {
+        sortKey = key;
+        sortDir = -1;
+      }
+      // Update sort arrow UI
+      $$('#product-table th').forEach(function (h) { h.classList.remove('sorted'); });
+      th.classList.add('sorted');
+      th.querySelector('.sort-arrow').innerHTML = sortDir > 0 ? '&#9650;' : '&#9660;';
+      sortProducts();
+      renderTable();
+    });
+  });
+
+  // Table row click -> open history
+  elTbody.addEventListener('click', function (e) {
+    var row = e.target.closest('tr[data-asin]');
+    if (!row) return;
+    openHistory(row.getAttribute('data-asin'));
+  });
+
+  // Modal close
+  elModalClose.addEventListener('click', closeModal);
+  elModalOverlay.addEventListener('click', function (e) {
+    if (e.target === elModalOverlay) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  // ---- Initial load ----
+  loadData();
+
+})();
+</script>
+</body>
 </html>
