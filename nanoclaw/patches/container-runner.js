@@ -252,8 +252,9 @@ export async function runContainerAgent(group, input, onProcess, onOutput) {
                 wholesale_cost: costMatch ? parseFloat(costMatch[1]) : null,
             }
         });
+        const inngestHost = process.env.INNGEST_HOST || 'inngest-inngest-server-1';
         const req = http.request({
-            hostname: '127.0.0.1',
+            hostname: inngestHost,
             port: 8288,
             path: '/e/local-fba-event-key',
             method: 'POST',
