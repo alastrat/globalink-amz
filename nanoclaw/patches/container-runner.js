@@ -252,7 +252,7 @@ export async function runContainerAgent(group, input, onProcess, onOutput) {
                 wholesale_cost: costMatch ? parseFloat(costMatch[1]) : null,
             }
         });
-        const inngestHost = process.env.INNGEST_HOST || 'inngest-inngest-server-1';
+        const inngestHost = process.env.INNGEST_HOST || 'globalink-fba-inngest-server-1';
         const req = http.request({
             hostname: inngestHost,
             port: 8288,
