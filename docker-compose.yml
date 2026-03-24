@@ -37,7 +37,7 @@ services:
       - INNGEST_EVENT_KEY=${INNGEST_EVENT_KEY:-local-fba-event-key}
       - INNGEST_SIGNING_KEY=${INNGEST_SIGNING_KEY:-signkey-test-12345678}
       - TOOLS_DIR=/tools
-      - IPC_DIR=/ipc/messages
+      - IPC_DIR=/opt/nanoclaw/data/ipc/owner/messages
       - CACHE_DIR=/cache
       - CHAT_JID=${CHAT_JID:-573002061607@s.whatsapp.net}
       - DASHBOARD_USER=${DASHBOARD_USER}
