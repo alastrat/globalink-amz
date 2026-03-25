@@ -791,6 +791,83 @@
       border-top: 1px solid var(--border);
     }
 
+    /* ---- Step Summary Bar ---- */
+    .step-summary-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      margin: 8px 12px 0;
+      font-size: 13px;
+    }
+    .step-summary-count {
+      color: #c9d1d9;
+      font-weight: 600;
+    }
+    .step-summary-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .step-export-btn {
+      background: #30363d;
+      border: 1px solid #484f58;
+      color: #c9d1d9;
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .step-export-btn:hover { background: #484f58; }
+
+    /* ---- Product Cards (Preview tab) ---- */
+    .product-cards { padding: 8px 0; }
+    .product-card {
+      display: flex;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #21262d;
+    }
+    .product-card:last-child { border-bottom: none; }
+    .product-card-img {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+      border-radius: 4px;
+      background: #161b22;
+      flex-shrink: 0;
+    }
+    .product-card-info { flex: 1; min-width: 0; }
+    .product-card-asin {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: #58a6ff;
+      text-decoration: none;
+    }
+    .product-card-asin:hover { text-decoration: underline; }
+    .product-card-title {
+      font-size: 12px;
+      color: #c9d1d9;
+      margin: 2px 0 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .product-card-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+      color: #8b949e;
+    }
+    .product-card-stats .grade-badge {
+      width: 18px; height: 18px; line-height: 18px; font-size: 10px;
+    }
+
     /* ---- Responsive ---- */
     @media (max-width: 768px) {
       .container { padding: 12px; }
@@ -2027,11 +2104,11 @@
   function syntaxHighlightLine(line) {
     line = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // Keys: "key": (before colon)
-    line = line.replace(/("(?:\\\\.|[^"\\\\])*")(\s*:)/g, '<span class="hl-key">$1</span>$2');
+    line = line.replace(/("(?:[^"\\]|\\.)*")(\s*:)/g, '<span class="hl-key">$1</span>$2');
     // String values: : "value" (after colon)
-    line = line.replace(/:(\s*)("(?:\\\\.|[^"\\\\])*")/g, ':$1<span class="hl-string">$2</span>');
+    line = line.replace(/:(\s*)("(?:[^"\\]|\\.)*")/g, ':$1<span class="hl-string">$2</span>');
     // Standalone strings in arrays
-    line = line.replace(/(^\s*)"((?:\\\\.|[^"\\\\])*)"(\s*,?\s*$)/gm, '$1<span class="hl-string">"$2"</span>$3');
+    line = line.replace(/(^\s*)"((?:[^"\\]|\\.)*)"(\s*,?\s*$)/gm, '$1<span class="hl-string">"$2"</span>$3');
     // Numbers after colon
     line = line.replace(/:(\s*)(-?\d+\.?\d*)/g, ':$1<span class="hl-number">$2</span>');
     // Booleans and null after colon
@@ -2041,6 +2118,60 @@
 
   var _copyData = {};
   var _copyId = 0;
+  var _stepExportData = {}; // keyed by copyId for export buttons
+
+  function downloadJSON(data, filename) {
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadCSV(items, filename) {
+    if (!items.length) return;
+    var keys = Object.keys(items[0]);
+    var csv = keys.join(',') + '\n';
+    items.forEach(function(item) {
+      csv += keys.map(function(k) {
+        var v = item[k];
+        if (v == null) return '';
+        if (typeof v === 'string') return '"' + v.replace(/"/g, '""') + '"';
+        return String(v);
+      }).join(',') + '\n';
+    });
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function buildPreviewCards(items) {
+    var placeholder = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect width='56' height='56' fill='%23161b22'/%3E%3Ctext x='28' y='32' text-anchor='middle' fill='%23484f58' font-size='9'%3ENo img%3C/text%3E%3C/svg%3E";
+    var html = '<div class="product-cards">';
+    items.forEach(function(item) {
+      var asin = item.asin || item.ASIN || '';
+      var title = item.title || item.name || asin;
+      var img = item.main_image_url || item.image || '';
+
+      html += '<div class="product-card">';
+      html += '<img class="product-card-img" src="' + esc(img || placeholder) + '" onerror="this.src=\'' + placeholder + '\'">';
+      html += '<div class="product-card-info">';
+      if (asin) html += '<a class="product-card-asin" href="https://amazon.com/dp/' + esc(asin) + '" target="_blank">' + esc(asin) + '</a>';
+      html += '<div class="product-card-title">' + esc(title) + '</div>';
+      html += '<div class="product-card-stats">';
+      if (item.buy_box_price != null) html += '<span>$' + Number(item.buy_box_price).toFixed(2) + '</span>';
+      if (item.bsr != null) html += '<span>BSR: ' + Number(item.bsr).toLocaleString() + '</span>';
+      if (item.fba_offer_count != null) html += '<span>' + item.fba_offer_count + ' FBA</span>';
+      if (item.restricted != null) html += (item.restricted ? '<span class="restricted-yes">Restricted</span>' : '<span class="restricted-no">Approved</span>');
+      if (item.estimated_monthly_sales != null) html += '<span>' + item.estimated_monthly_sales + '/mo</span>';
+      if (item.roi != null) html += '<span>ROI: ' + Number(item.roi).toFixed(1) + '%</span>';
+      if (item.score != null) html += '<span>Score: ' + Number(item.score).toFixed(0) + '</span>';
+      if (item.grade) html += '<span class="grade-badge ' + gradeClass(item.grade) + '">' + esc(item.grade) + '</span>';
+      html += '</div></div></div>';
+    });
+    html += '</div>';
+    return html;
+  }
 
   function buildCodeViewer(jsonStr, label, rawData) {
     var id = 'cv-' + (++_copyId);
@@ -2123,10 +2254,13 @@
     panelHtml += '<span style="font-size:12px;color:var(--text-muted);font-family:var(--mono);">' + fmtDuration(Number(stepDurationMs)) + '</span>';
     panelHtml += '</div>';
 
-    // Tabs
+    // Summary bar placeholder (shown/hidden after fetch)
+    panelHtml += '<div data-step-summary="' + esc(runId) + '" style="display:none;"></div>';
+
+    // Tabs: Output always present; Preview hidden initially
     panelHtml += '<div class="step-panel-tabs">';
     panelHtml += '<button class="step-panel-tab active" data-panel-tab="output">Output</button>';
-    panelHtml += '<button class="step-panel-tab" data-panel-tab="input">Input</button>';
+    panelHtml += '<button class="step-panel-tab" data-panel-tab="preview" style="display:none;">Preview</button>';
     panelHtml += '</div>';
 
     // Content area
@@ -2137,20 +2271,23 @@
     panel.innerHTML = panelHtml;
 
     // Wire tab clicks
-    panel.querySelectorAll('.step-panel-tab').forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        var targetTab = tab.getAttribute('data-panel-tab');
-        panel.querySelectorAll('.step-panel-tab').forEach(function (t) {
-          t.classList.toggle('active', t.getAttribute('data-panel-tab') === targetTab);
-        });
-        var contentEl = findStepContent(runId);
-        if (contentEl) {
-          contentEl.querySelectorAll('[data-panel-content]').forEach(function (c) {
-            c.style.display = c.getAttribute('data-panel-content') === targetTab ? '' : 'none';
+    function wireTabClicks() {
+      panel.querySelectorAll('.step-panel-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          var targetTab = tab.getAttribute('data-panel-tab');
+          panel.querySelectorAll('.step-panel-tab').forEach(function (t) {
+            t.classList.toggle('active', t.getAttribute('data-panel-tab') === targetTab);
           });
-        }
+          var contentEl = findStepContent(runId);
+          if (contentEl) {
+            contentEl.querySelectorAll('[data-panel-content]').forEach(function (c) {
+              c.style.display = c.getAttribute('data-panel-content') === targetTab ? '' : 'none';
+            });
+          }
+        });
       });
-    });
+    }
+    wireTabClicks();
 
     // Fetch output
     if (!outputID) {
@@ -2176,6 +2313,8 @@
       var contentEl = findStepContent(runId);
       if (!contentEl) return;
 
+      var panelEl = findStepPanel(runId);
+
       var output = result.data && result.data.runTraceSpanOutputByID;
       if (!output) {
         contentEl.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px;">No output returned from Inngest.</div>';
@@ -2184,48 +2323,119 @@
 
       var hasData = output.data != null;
       var hasError = output.error != null;
+      var parsed = null;
+      var prettyJSON = '';
+      var rawData = '';
 
-      var html = '';
-
-      // Output content
-      html += '<div data-panel-content="output">';
       if (hasData) {
-        var prettyJSON;
-        var rawData;
         try {
-          var parsed = JSON.parse(output.data);
+          parsed = JSON.parse(output.data);
           prettyJSON = JSON.stringify(parsed, null, 2);
           rawData = prettyJSON;
         } catch (e) {
           prettyJSON = output.data;
           rawData = output.data;
         }
+      }
+
+      // Detect if output is an array of objects (product array)
+      var isProductArray = Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null;
+
+      // Store export data and build summary bar + show Preview tab if product array
+      var exportKey = 'export-' + (++_copyId);
+      if (isProductArray) {
+        _stepExportData[exportKey] = parsed;
+
+        // Show summary bar
+        var summaryEl = panelEl ? panelEl.querySelector('[data-step-summary="' + runId + '"]') : null;
+        if (summaryEl) {
+          summaryEl.style.display = '';
+          summaryEl.innerHTML = '<div class="step-summary-bar">'
+            + '<span class="step-summary-count">' + parsed.length + ' product' + (parsed.length !== 1 ? 's' : '') + '</span>'
+            + '<div class="step-summary-actions">'
+            + '<button class="step-export-btn" data-export-key="' + exportKey + '" data-export-type="json">Export JSON</button>'
+            + '<button class="step-export-btn" data-export-key="' + exportKey + '" data-export-type="csv">Export CSV</button>'
+            + '</div>'
+            + '</div>';
+
+          // Wire export buttons
+          summaryEl.querySelectorAll('.step-export-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              var eKey = btn.getAttribute('data-export-key');
+              var eType = btn.getAttribute('data-export-type');
+              var items = _stepExportData[eKey];
+              if (!items) return;
+              var filename = 'step-output-' + new Date().toISOString().slice(0,10);
+              if (eType === 'json') {
+                downloadJSON(items, filename + '.json');
+              } else {
+                downloadCSV(items, filename + '.csv');
+              }
+            });
+          });
+        }
+
+        // Show Preview tab button
+        if (panelEl) {
+          var previewTab = panelEl.querySelector('.step-panel-tab[data-panel-tab="preview"]');
+          if (previewTab) {
+            previewTab.style.display = '';
+          }
+        }
+      }
+
+      // If there's an error, add Error tab
+      if (hasError && panelEl) {
+        var tabsContainer = panelEl.querySelector('.step-panel-tabs');
+        if (tabsContainer) {
+          var errorBtn = document.createElement('button');
+          errorBtn.className = 'step-panel-tab';
+          errorBtn.setAttribute('data-panel-tab', 'error');
+          errorBtn.textContent = 'Error';
+          tabsContainer.appendChild(errorBtn);
+
+          errorBtn.addEventListener('click', function () {
+            tabsContainer.querySelectorAll('.step-panel-tab').forEach(function (t) {
+              t.classList.toggle('active', t.getAttribute('data-panel-tab') === 'error');
+            });
+            var cEl = findStepContent(runId);
+            if (cEl) {
+              cEl.querySelectorAll('[data-panel-content]').forEach(function (c) {
+                c.style.display = c.getAttribute('data-panel-content') === 'error' ? '' : 'none';
+              });
+            }
+          });
+        }
+      }
+
+      var html = '';
+
+      // Output content (always visible by default)
+      html += '<div data-panel-content="output">';
+      if (hasData) {
         html += buildCodeViewer(prettyJSON, 'Step Output', rawData);
       } else {
         html += buildCodeViewer('null', 'Step Output', 'null');
       }
       html += '</div>';
 
-      // Input tab content
-      html += '<div data-panel-content="input" style="display:none;">';
+      // Preview tab content (hidden by default, built from product array)
+      if (isProductArray) {
+        html += '<div data-panel-content="preview" style="display:none;">';
+        html += buildPreviewCards(parsed);
+        html += '</div>';
+      }
+
+      // Error tab content
       if (hasError) {
+        html += '<div data-panel-content="error" style="display:none;">';
         var errorText = '';
         if (output.error.name) errorText += output.error.name + ': ';
         errorText += output.error.message || 'Unknown error';
         if (output.error.stack) errorText += '\n\n' + output.error.stack;
         html += buildCodeViewer(errorText, 'Error Details', errorText);
-      } else {
-        html += '<div style="padding:16px;color:var(--text-muted);font-size:13px;">Step input is not captured by Inngest trace API.</div>';
-      }
-      html += '</div>';
-
-      // If there's an error, update tab label
-      if (hasError) {
-        var panelEl = findStepPanel(runId);
-        if (panelEl) {
-          var inputTab = panelEl.querySelector('.step-panel-tab[data-panel-tab="input"]');
-          if (inputTab) inputTab.textContent = 'Error';
-        }
+        html += '</div>';
       }
 
       contentEl.innerHTML = html;
@@ -2235,9 +2445,9 @@
 
     } catch (e) {
       if (selectedStepKey !== currentKey) return;
-      var contentEl = findStepContent(runId);
-      if (contentEl) {
-        contentEl.innerHTML = '<div class="step-panel-error">Error fetching step output: ' + esc(e.message) + '</div>';
+      var contentEl2 = findStepContent(runId);
+      if (contentEl2) {
+        contentEl2.innerHTML = '<div class="step-panel-error">Error fetching step output: ' + esc(e.message) + '</div>';
       }
     }
   }
