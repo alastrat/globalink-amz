@@ -558,6 +558,112 @@
       font-family: var(--mono);
       text-align: left;
     }
+    .timeline-bar {
+      cursor: pointer;
+      transition: box-shadow 0.15s, filter 0.15s;
+    }
+    .timeline-bar:hover {
+      filter: brightness(1.2);
+      box-shadow: 0 0 6px rgba(255,255,255,0.15);
+    }
+    .timeline-bar.selected {
+      box-shadow: 0 0 0 2px var(--text-bright), 0 0 12px rgba(99,102,241,0.4);
+      filter: brightness(1.3);
+      z-index: 1;
+    }
+    .step-detail-panel {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+    .step-detail-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .step-detail-header .step-detail-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-bright);
+      font-family: var(--mono);
+    }
+    .step-detail-header .step-detail-duration {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+    .step-detail-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .step-detail-tab {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--sans);
+      transition: all 0.15s;
+    }
+    .step-detail-tab:hover { color: var(--text); background: rgba(99,102,241,0.08); }
+    .step-detail-tab.active {
+      color: var(--text-bright);
+      background: var(--card);
+      border-color: var(--border);
+    }
+    .step-detail-body {
+      max-height: 300px;
+      overflow: auto;
+      scrollbar-width: thin;
+    }
+    .step-detail-body pre {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+      color: var(--text);
+    }
+    .step-detail-body .json-key { color: #f0f6fc; }
+    .step-detail-body .json-string { color: #7ee787; }
+    .step-detail-body .json-number { color: #79c0ff; }
+    .step-detail-body .json-bool,
+    .step-detail-body .json-null { color: #d29922; }
+    .step-detail-error pre {
+      color: var(--red);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+    }
+    .step-detail-spinner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      padding: 12px 0;
+    }
+    .step-detail-spinner .mini-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
     .timeline-empty {
       padding: 16px;
       text-align: center;
@@ -1632,7 +1738,7 @@
 
     try {
       // Fetch Inngest step timeline
-      var traceQuery = '{ runTrace(runID: "' + runId + '") { name status duration queuedAt startedAt endedAt stepID isRoot childrenSpans { name status duration queuedAt startedAt endedAt stepID } } }';
+      var traceQuery = '{ runTrace(runID: "' + runId + '") { name status duration queuedAt startedAt endedAt stepID isRoot outputID childrenSpans { name status duration queuedAt startedAt endedAt stepID outputID } } }';
       var traceResult = await inngestQuery(traceQuery);
 
       var html = '';
@@ -1674,7 +1780,7 @@
           html += '</div></div>';
 
           // Step bars
-          steps.forEach(function (step) {
+          steps.forEach(function (step, stepIdx) {
             var stepStart = step.startedAt ? new Date(step.startedAt).getTime() : runStart;
             var stepEnd = step.endedAt ? new Date(step.endedAt).getTime() : (step.status === 'RUNNING' ? Date.now() : stepStart);
             var stepDuration = stepEnd - stepStart;
@@ -1694,14 +1800,23 @@
             else if (statusLower === 'running') barClass += ' running';
             else barClass += ' cancelled';
 
+            var dataAttrs = ' data-step-idx="' + stepIdx + '"'
+              + ' data-step-name="' + esc(step.name || step.stepID || 'step') + '"'
+              + ' data-step-status="' + esc(statusLower) + '"'
+              + ' data-step-duration="' + stepDuration + '"'
+              + (step.outputID ? ' data-output-id="' + esc(step.outputID) + '"' : '');
+
             html += '<div class="timeline-row">';
             html += '<span class="timeline-step-name" title="' + esc(step.name || step.stepID || '') + '">' + esc(step.name || step.stepID || 'step') + '</span>';
             html += '<div class="timeline-track">';
-            html += '<div class="' + barClass + '" style="left:' + offsetPct.toFixed(2) + '%;width:' + widthPct.toFixed(2) + '%;"></div>';
+            html += '<div class="' + barClass + '"' + dataAttrs + ' style="left:' + offsetPct.toFixed(2) + '%;width:' + widthPct.toFixed(2) + '%;" title="Click to view step output"></div>';
             html += '</div>';
             html += '<span class="timeline-duration-label">' + fmtDurationShort(stepDuration) + '</span>';
             html += '</div>';
           });
+
+          // Step detail panel placeholder (populated when a bar is clicked)
+          html += '<div id="step-detail-' + esc(runId) + '"></div>';
         } else {
           html += '<div class="timeline-empty">No steps recorded for this run.</div>';
         }
@@ -1757,15 +1872,190 @@
     }
   }
 
+  // ---- Step detail panel ----
+  var selectedStepKey = null; // "runId:stepIdx"
+
+  function syntaxHighlightJSON(jsonStr) {
+    // Simple regex-based JSON syntax highlighting (no library)
+    return jsonStr
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/("(?:\\.|[^"\\])*"\s*:)/g, '<span class="json-key">$1</span>')
+      .replace(/:(\s*"(?:\\.|[^"\\])*")/g, ':<span class="json-string">$1</span>')
+      .replace(/:(\s*-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, ':<span class="json-number">$1</span>')
+      .replace(/:(\s*(?:true|false))/g, ':<span class="json-bool">$1</span>')
+      .replace(/:(\s*null)/g, ':<span class="json-null">$1</span>');
+  }
+
+  function renderStepDetailPanel(runId, stepIdx, stepName, stepStatus, stepDurationMs, outputID) {
+    var container = document.getElementById('step-detail-' + CSS.escape(runId));
+    if (!container) return;
+
+    var key = runId + ':' + stepIdx;
+
+    // Toggle: clicking the same bar closes the panel
+    if (selectedStepKey === key) {
+      selectedStepKey = null;
+      container.innerHTML = '';
+      // Remove .selected from all bars in this run
+      var runDetail = document.getElementById('run-detail-' + CSS.escape(runId));
+      if (runDetail) {
+        runDetail.querySelectorAll('.timeline-bar.selected').forEach(function (b) {
+          b.classList.remove('selected');
+        });
+      }
+      return;
+    }
+
+    selectedStepKey = key;
+
+    // Highlight the selected bar, remove from others
+    var runDetail = document.getElementById('run-detail-' + CSS.escape(runId));
+    if (runDetail) {
+      runDetail.querySelectorAll('.timeline-bar.selected').forEach(function (b) {
+        b.classList.remove('selected');
+      });
+      var activeBar = runDetail.querySelector('.timeline-bar[data-step-idx="' + stepIdx + '"]');
+      if (activeBar) activeBar.classList.add('selected');
+    }
+
+    // Build panel header
+    var panelHtml = '<div class="step-detail-panel">';
+    panelHtml += '<div class="step-detail-header">';
+    panelHtml += '<span class="step-detail-name">' + esc(stepName) + '</span>';
+    panelHtml += '<span class="status-badge ' + statusClass(stepStatus) + '">' + esc(stepStatus) + '</span>';
+    panelHtml += '<span class="step-detail-duration">' + fmtDuration(Number(stepDurationMs)) + '</span>';
+    panelHtml += '</div>';
+
+    // Loading state
+    panelHtml += '<div class="step-detail-body">';
+    panelHtml += '<div class="step-detail-spinner"><div class="mini-spinner"></div>Loading step output...</div>';
+    panelHtml += '</div>';
+    panelHtml += '</div>';
+
+    container.innerHTML = panelHtml;
+
+    // Fetch output
+    if (!outputID) {
+      container.querySelector('.step-detail-body').innerHTML = '<pre style="color:var(--text-muted);">No output data available for this step.</pre>';
+      return;
+    }
+
+    fetchStepOutput(runId, stepIdx, outputID, container);
+  }
+
+  async function fetchStepOutput(runId, stepIdx, outputID, container) {
+    var currentKey = runId + ':' + stepIdx;
+    try {
+      var query = '{ runTraceSpanOutputByID(outputID: "' + outputID + '") { data error { message name stack } } }';
+      var result = await inngestQuery(query);
+
+      // Check if user clicked away while loading
+      if (selectedStepKey !== currentKey) return;
+
+      var bodyEl = container.querySelector('.step-detail-body');
+      if (!bodyEl) return;
+
+      var output = result.data && result.data.runTraceSpanOutputByID;
+      if (!output) {
+        bodyEl.innerHTML = '<pre style="color:var(--text-muted);">No output returned from Inngest.</pre>';
+        return;
+      }
+
+      var hasData = output.data != null;
+      var hasError = output.error != null;
+
+      var html = '';
+
+      // Tabs (only show Error tab if error exists)
+      if (hasError) {
+        html += '<div class="step-detail-tabs">';
+        html += '<button class="step-detail-tab active" data-detail-tab="output">Output</button>';
+        html += '<button class="step-detail-tab" data-detail-tab="error">Error</button>';
+        html += '</div>';
+      }
+
+      // Output content
+      html += '<div class="step-detail-tab-content" data-detail-content="output">';
+      if (hasData) {
+        var prettyJSON;
+        try {
+          prettyJSON = JSON.stringify(JSON.parse(output.data), null, 2);
+        } catch (e) {
+          prettyJSON = output.data;
+        }
+        html += '<pre>' + syntaxHighlightJSON(prettyJSON) + '</pre>';
+      } else {
+        html += '<pre style="color:var(--text-muted);">null</pre>';
+      }
+      html += '</div>';
+
+      // Error content (hidden by default)
+      if (hasError) {
+        html += '<div class="step-detail-tab-content step-detail-error" data-detail-content="error" style="display:none;">';
+        html += '<pre>';
+        if (output.error.name) html += esc(output.error.name) + ': ';
+        html += esc(output.error.message || 'Unknown error') + '\n';
+        if (output.error.stack) html += '\n' + esc(output.error.stack);
+        html += '</pre>';
+        html += '</div>';
+      }
+
+      bodyEl.innerHTML = html;
+
+      // Wire tab clicks
+      bodyEl.querySelectorAll('.step-detail-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          var targetTab = tab.getAttribute('data-detail-tab');
+          bodyEl.querySelectorAll('.step-detail-tab').forEach(function (t) {
+            t.classList.toggle('active', t.getAttribute('data-detail-tab') === targetTab);
+          });
+          bodyEl.querySelectorAll('.step-detail-tab-content').forEach(function (c) {
+            c.style.display = c.getAttribute('data-detail-content') === targetTab ? '' : 'none';
+          });
+        });
+      });
+
+    } catch (e) {
+      if (selectedStepKey !== currentKey) return;
+      var bodyEl = container.querySelector('.step-detail-body');
+      if (bodyEl) {
+        bodyEl.innerHTML = '<pre style="color:var(--red);">Error fetching step output: ' + esc(e.message) + '</pre>';
+      }
+    }
+  }
+
   // Run row click -> toggle expand
   $('#runs-tbody').addEventListener('click', function (e) {
+    // Handle timeline bar clicks (step detail)
+    var bar = e.target.closest('.timeline-bar[data-step-idx]');
+    if (bar) {
+      e.stopPropagation();
+      var runRow = bar.closest('.run-detail-content');
+      var runDetailRow = bar.closest('tr.run-detail-row');
+      var runId = runDetailRow ? runDetailRow.getAttribute('data-run-detail') : null;
+      if (!runId) return;
+
+      var stepIdx = bar.getAttribute('data-step-idx');
+      var stepName = bar.getAttribute('data-step-name');
+      var stepStatus = bar.getAttribute('data-step-status');
+      var stepDuration = bar.getAttribute('data-step-duration');
+      var outputID = bar.getAttribute('data-output-id');
+
+      renderStepDetailPanel(runId, stepIdx, stepName, stepStatus, stepDuration, outputID);
+      return;
+    }
+
     var row = e.target.closest('tr.run-row');
     if (!row) return;
     var runId = row.getAttribute('data-run-id');
     if (expandedRunId === runId) {
       expandedRunId = null;
+      selectedStepKey = null; // Clear step selection when collapsing
     } else {
       expandedRunId = runId;
+      selectedStepKey = null; // Clear step selection when switching runs
     }
     renderRuns();
   });
