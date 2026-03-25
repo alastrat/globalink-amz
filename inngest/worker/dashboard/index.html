@@ -434,6 +434,147 @@
     }
     .run-row.expanded .expand-arrow { transform: rotate(90deg); }
 
+    /* ---- Status badge ---- */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .status-completed { background: var(--green); }
+    .status-failed { background: var(--red); }
+    .status-running { background: var(--blue); animation: pulse-badge 1.5s ease-in-out infinite; }
+    .status-cancelled { background: var(--gray); }
+    @keyframes pulse-badge {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    /* ---- Step Timeline ---- */
+    .timeline-section {
+      margin-bottom: 16px;
+    }
+    .timeline-section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      padding: 0 0 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .timeline-total-duration {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+    .timeline-ticks {
+      position: relative;
+      height: 16px;
+      margin-bottom: 4px;
+    }
+    .timeline-tick {
+      position: absolute;
+      top: 0;
+      font-size: 9px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      transform: translateX(-50%);
+    }
+    .timeline-tick::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 14px;
+      width: 1px;
+      height: 6px;
+      background: var(--border);
+    }
+    .timeline-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+      gap: 8px;
+    }
+    .timeline-step-name {
+      width: 160px;
+      min-width: 160px;
+      font-size: 12px;
+      color: var(--text);
+      font-family: var(--mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
+    }
+    .timeline-track {
+      flex: 1;
+      position: relative;
+      height: 24px;
+      background: rgba(48,54,61,0.3);
+      border-radius: 4px;
+    }
+    .timeline-bar {
+      height: 24px;
+      border-radius: 4px;
+      position: absolute;
+      top: 0;
+      min-width: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 6px;
+    }
+    .timeline-bar.completed { background: var(--green); }
+    .timeline-bar.failed { background: var(--red); }
+    .timeline-bar.running { background: var(--blue); animation: pulse-bar 1.5s ease-in-out infinite; }
+    .timeline-bar.cancelled { background: var(--gray); }
+    @keyframes pulse-bar {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .timeline-bar-label {
+      font-size: 10px;
+      color: #fff;
+      font-family: var(--mono);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .timeline-duration-label {
+      width: 60px;
+      min-width: 60px;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      text-align: left;
+    }
+    .timeline-empty {
+      padding: 16px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .timeline-error {
+      padding: 12px;
+      color: var(--red);
+      font-size: 13px;
+    }
+    .asin-results-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
     /* ---- Responsive ---- */
     @media (max-width: 768px) {
       .container { padding: 12px; }
@@ -633,13 +774,10 @@
         <thead>
           <tr>
             <th style="width:30px;"></th>
-            <th>ID</th>
-            <th>Timestamp</th>
-            <th>Source</th>
-            <th>Total ASINs</th>
-            <th>Approved</th>
-            <th>Restricted</th>
-            <th>Notes</th>
+            <th>Function</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Duration</th>
           </tr>
         </thead>
         <tbody id="runs-tbody"></tbody>
@@ -1323,31 +1461,136 @@
   });
 
   // ---- Runs data ----
-  var allRuns = [];
+  var inngestRuns = [];
+  var dbRuns = [];
   var expandedRunId = null;
+  var hasRunningRuns = false;
 
-  function sourceClass(src) {
-    if (src === 'research') return 'source-research';
-    if (src === 'nightly') return 'source-nightly';
-    if (src === 'manual') return 'source-manual';
+  function statusClass(status) {
+    var s = (status || '').toLowerCase();
+    if (s === 'completed') return 'status-completed';
+    if (s === 'failed') return 'status-failed';
+    if (s === 'running') return 'status-running';
+    if (s === 'cancelled') return 'status-cancelled';
     return 'source-unknown';
+  }
+
+  function fmtDuration(ms) {
+    if (ms == null || isNaN(ms)) return '--';
+    if (ms < 1000) return ms + 'ms';
+    if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+    var mins = Math.floor(ms / 60000);
+    var secs = ((ms % 60000) / 1000).toFixed(0);
+    return mins + 'm ' + secs + 's';
+  }
+
+  function fmtDurationShort(ms) {
+    if (ms == null || isNaN(ms)) return '--';
+    if (ms < 1000) return ms + 'ms';
+    if (ms < 10000) return (ms / 1000).toFixed(1) + 's';
+    if (ms < 60000) return (ms / 1000).toFixed(0) + 's';
+    var mins = Math.floor(ms / 60000);
+    var secs = ((ms % 60000) / 1000).toFixed(0);
+    return mins + 'm' + secs + 's';
+  }
+
+  function fmtRunTimestamp(ts) {
+    if (!ts) return '--';
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return ts;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function functionDisplayName(name) {
+    if (!name) return 'Unknown';
+    // Strip "fba/" prefix for cleaner display
+    return name.replace(/^fba\//, '');
+  }
+
+  async function inngestQuery(query, variables) {
+    var resp = await fetch('/api/inngest-query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query, variables: variables || {} })
+    });
+    if (!resp.ok) {
+      var body;
+      try { body = await resp.json(); } catch (e) { body = {}; }
+      throw new Error(body.error || 'Inngest query failed: ' + resp.status);
+    }
+    return resp.json();
   }
 
   async function loadRuns() {
     try {
-      var data = await apiFetch('/api/runs?limit=50');
-      allRuns = data.runs || [];
+      // Fetch from both Inngest GraphQL and our DB in parallel
+      var fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - 7);
+      var fromISO = fromDate.toISOString();
+
+      var runsQuery = '{ runs(filter: { status: [COMPLETED, FAILED, RUNNING] , from: "' + fromISO + '" }, orderBy: [{ field: QUEUED_AT, direction: DESC }], first: 20) { edges { node { id status startedAt endedAt traceID function { name slug } } } } }';
+
+      var results = await Promise.allSettled([
+        inngestQuery(runsQuery),
+        apiFetch('/api/runs?limit=50')
+      ]);
+
+      // Process Inngest runs
+      if (results[0].status === 'fulfilled' && results[0].value.data) {
+        var edges = results[0].value.data.runs.edges || [];
+        inngestRuns = edges.map(function (e) { return e.node; });
+        hasRunningRuns = inngestRuns.some(function (r) { return r.status === 'RUNNING'; });
+      } else {
+        inngestRuns = [];
+        hasRunningRuns = false;
+      }
+
+      // Process DB runs
+      if (results[1].status === 'fulfilled') {
+        dbRuns = results[1].value.runs || [];
+      } else {
+        dbRuns = [];
+      }
+
       renderRuns();
+      adjustRefreshInterval();
     } catch (e) {
       showToast('Failed to load runs: ' + e.message);
     }
+  }
+
+  function matchDbRun(inngestRun) {
+    // Match Inngest run to DB run by timestamp proximity (within 5 seconds)
+    if (!inngestRun.startedAt || dbRuns.length === 0) return null;
+    var inngestTime = new Date(inngestRun.startedAt).getTime();
+    var bestMatch = null;
+    var bestDiff = Infinity;
+
+    dbRuns.forEach(function (dbRun) {
+      if (!dbRun.timestamp) return;
+      var dbTime = new Date(dbRun.timestamp).getTime();
+      var diff = Math.abs(inngestTime - dbTime);
+      if (diff < 5000 && diff < bestDiff) {
+        bestDiff = diff;
+        bestMatch = dbRun;
+      }
+    });
+    return bestMatch;
+  }
+
+  function calcDuration(run) {
+    if (!run.startedAt) return null;
+    var start = new Date(run.startedAt).getTime();
+    var end = run.endedAt ? new Date(run.endedAt).getTime() : Date.now();
+    return end - start;
   }
 
   function renderRuns() {
     var tbody = $('#runs-tbody');
     var emptyEl = $('#runs-empty');
 
-    if (allRuns.length === 0) {
+    if (inngestRuns.length === 0) {
       tbody.innerHTML = '';
       emptyEl.style.display = 'block';
       return;
@@ -1355,22 +1598,23 @@
 
     emptyEl.style.display = 'none';
     var html = '';
-    allRuns.forEach(function (r) {
+    inngestRuns.forEach(function (r) {
       var isExpanded = expandedRunId === r.id;
-      html += '<tr class="run-row' + (isExpanded ? ' expanded' : '') + '" data-run-id="' + r.id + '">'
-        + '<td><span class="expand-arrow">' + (isExpanded ? '&#9656;' : '&#9656;') + '</span></td>'
-        + '<td class="num">' + r.id + '</td>'
-        + '<td>' + esc(fmtRunTimestamp(r.timestamp)) + '</td>'
-        + '<td><span class="source-badge ' + sourceClass(r.source) + '">' + esc(r.source || 'unknown') + '</span></td>'
-        + '<td class="num">' + (r.total_asins || 0) + '</td>'
-        + '<td class="num">' + (r.approved_count || 0) + '</td>'
-        + '<td class="num">' + (r.restricted_count || 0) + '</td>'
-        + '<td>' + esc(r.notes || '--') + '</td>'
+      var duration = calcDuration(r);
+      var funcName = r.function ? r.function.name : 'Unknown';
+      var statusLower = (r.status || '').toLowerCase();
+
+      html += '<tr class="run-row' + (isExpanded ? ' expanded' : '') + '" data-run-id="' + esc(r.id) + '">'
+        + '<td><span class="expand-arrow">&#9656;</span></td>'
+        + '<td>' + esc(functionDisplayName(funcName)) + '</td>'
+        + '<td><span class="status-badge ' + statusClass(r.status) + '">' + esc(statusLower) + '</span></td>'
+        + '<td>' + esc(fmtRunTimestamp(r.startedAt)) + '</td>'
+        + '<td class="num">' + fmtDuration(duration) + '</td>'
         + '</tr>';
 
       if (isExpanded) {
-        html += '<tr class="run-detail-row" data-run-detail="' + r.id + '">'
-          + '<td colspan="8"><div class="run-detail-content" id="run-detail-' + r.id + '">Loading...</div></td>'
+        html += '<tr class="run-detail-row" data-run-detail="' + esc(r.id) + '">'
+          + '<td colspan="5"><div class="run-detail-content" id="run-detail-' + esc(r.id) + '">Loading...</div></td>'
           + '</tr>';
       }
     });
@@ -1382,46 +1626,134 @@
     }
   }
 
-  function fmtRunTimestamp(ts) {
-    if (!ts) return '--';
-    var d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  }
-
   async function loadRunDetail(runId) {
-    var container = $('#run-detail-' + runId);
+    var container = $('#run-detail-' + CSS.escape(runId));
     if (!container) return;
 
     try {
-      var data = await apiFetch('/api/run/' + runId);
-      var snaps = data.snapshots || [];
-      if (snaps.length === 0) {
-        container.innerHTML = '<p style="color:var(--text-muted);padding:12px;">No ASIN snapshots in this run.</p>';
-        return;
+      // Fetch Inngest step timeline
+      var traceQuery = '{ runTrace(runID: "' + runId + '") { name status duration queuedAt startedAt endedAt stepID isRoot childrenSpans { name status duration queuedAt startedAt endedAt stepID } } }';
+      var traceResult = await inngestQuery(traceQuery);
+
+      var html = '';
+
+      // Step timeline section
+      html += '<div class="timeline-section">';
+      html += '<div class="timeline-section-title">Step Timeline</div>';
+
+      if (traceResult.data && traceResult.data.runTrace) {
+        var trace = traceResult.data.runTrace;
+        var steps = trace.childrenSpans || [];
+
+        if (steps.length === 0 && trace.isRoot) {
+          // Single-step function — show the root as the only step
+          steps = [{ name: trace.name, status: trace.status, duration: trace.duration, startedAt: trace.startedAt, endedAt: trace.endedAt, stepID: trace.stepID }];
+        }
+
+        if (steps.length > 0) {
+          // Calculate timeline scale
+          var runStart = new Date(trace.startedAt || trace.queuedAt).getTime();
+          var runEnd = trace.endedAt ? new Date(trace.endedAt).getTime() : Date.now();
+          var totalDuration = runEnd - runStart;
+          if (totalDuration <= 0) totalDuration = 1;
+
+          // Timeline header
+          html += '<div class="timeline-header">';
+          html += '<span class="timeline-section-title" style="margin:0;">Steps (' + steps.length + ')</span>';
+          html += '<span class="timeline-total-duration">Total: ' + fmtDuration(totalDuration) + '</span>';
+          html += '</div>';
+
+          // Tick marks
+          html += '<div style="margin-left:168px;margin-right:68px;"><div class="timeline-ticks">';
+          var tickCount = 5;
+          for (var t = 0; t <= tickCount; t++) {
+            var pct = (t / tickCount) * 100;
+            var tickMs = (t / tickCount) * totalDuration;
+            html += '<span class="timeline-tick" style="left:' + pct + '%;">' + fmtDurationShort(Math.round(tickMs)) + '</span>';
+          }
+          html += '</div></div>';
+
+          // Step bars
+          steps.forEach(function (step) {
+            var stepStart = step.startedAt ? new Date(step.startedAt).getTime() : runStart;
+            var stepEnd = step.endedAt ? new Date(step.endedAt).getTime() : (step.status === 'RUNNING' ? Date.now() : stepStart);
+            var stepDuration = stepEnd - stepStart;
+            if (stepDuration < 0) stepDuration = 0;
+
+            var offsetPct = ((stepStart - runStart) / totalDuration) * 100;
+            var widthPct = (stepDuration / totalDuration) * 100;
+            if (offsetPct < 0) offsetPct = 0;
+            if (offsetPct > 100) offsetPct = 100;
+            if (widthPct < 0.5) widthPct = 0.5; // min visible width
+            if (offsetPct + widthPct > 100) widthPct = 100 - offsetPct;
+
+            var statusLower = (step.status || '').toLowerCase();
+            var barClass = 'timeline-bar';
+            if (statusLower === 'completed') barClass += ' completed';
+            else if (statusLower === 'failed') barClass += ' failed';
+            else if (statusLower === 'running') barClass += ' running';
+            else barClass += ' cancelled';
+
+            html += '<div class="timeline-row">';
+            html += '<span class="timeline-step-name" title="' + esc(step.name || step.stepID || '') + '">' + esc(step.name || step.stepID || 'step') + '</span>';
+            html += '<div class="timeline-track">';
+            html += '<div class="' + barClass + '" style="left:' + offsetPct.toFixed(2) + '%;width:' + widthPct.toFixed(2) + '%;"></div>';
+            html += '</div>';
+            html += '<span class="timeline-duration-label">' + fmtDurationShort(stepDuration) + '</span>';
+            html += '</div>';
+          });
+        } else {
+          html += '<div class="timeline-empty">No steps recorded for this run.</div>';
+        }
+      } else {
+        html += '<div class="timeline-error">Could not load step timeline from Inngest.</div>';
       }
 
-      var html = '<table style="width:100%"><thead><tr>'
-        + '<th>ASIN</th><th>Title</th><th>Grade</th><th>Score</th>'
-        + '<th>ROI%</th><th>Price</th><th>BSR</th><th>Restricted</th>'
-        + '</tr></thead><tbody>';
-      snaps.forEach(function (s) {
-        html += '<tr>'
-          + '<td><a class="asin-link" href="https://www.amazon.com/dp/' + esc(s.asin) + '" target="_blank" rel="noopener">' + esc(s.asin) + '</a></td>'
-          + '<td class="title-cell" title="' + esc(s.title || '') + '">' + esc(truncate(s.title, 35)) + '</td>'
-          + '<td><span class="grade-badge ' + gradeClass(s.grade) + '">' + esc(s.grade || '-') + '</span></td>'
-          + '<td class="num">' + fmt(s.score, 1) + '</td>'
-          + '<td class="num">' + fmt(s.roi, 1) + '%</td>'
-          + '<td class="num">' + fmtCurrency(s.buy_box_price) + '</td>'
-          + '<td class="num">' + fmtInt(s.bsr) + '</td>'
-          + '<td>' + (s.restricted ? '<span class="restricted-yes">Restricted</span>' : '<span class="restricted-no">Approved</span>') + '</td>'
-          + '</tr>';
-      });
-      html += '</tbody></table>';
+      html += '</div>'; // /timeline-section
+
+      // ASIN results section — match by timestamp proximity
+      var inngestRun = inngestRuns.find(function (r) { return r.id === runId; });
+      var dbRun = inngestRun ? matchDbRun(inngestRun) : null;
+
+      if (dbRun) {
+        html += '<div class="asin-results-section">';
+        html += '<div class="timeline-section-title">ASIN Results (Run #' + dbRun.id + ')</div>';
+
+        try {
+          var detailData = await apiFetch('/api/run/' + dbRun.id);
+          var snaps = detailData.snapshots || [];
+
+          if (snaps.length > 0) {
+            html += '<table style="width:100%"><thead><tr>'
+              + '<th>ASIN</th><th>Title</th><th>Grade</th><th>Score</th>'
+              + '<th>ROI%</th><th>Price</th><th>BSR</th><th>Restricted</th>'
+              + '</tr></thead><tbody>';
+            snaps.forEach(function (s) {
+              html += '<tr>'
+                + '<td><a class="asin-link" href="https://www.amazon.com/dp/' + esc(s.asin) + '" target="_blank" rel="noopener">' + esc(s.asin) + '</a></td>'
+                + '<td class="title-cell" title="' + esc(s.title || '') + '">' + esc(truncate(s.title, 35)) + '</td>'
+                + '<td><span class="grade-badge ' + gradeClass(s.grade) + '">' + esc(s.grade || '-') + '</span></td>'
+                + '<td class="num">' + fmt(s.score, 1) + '</td>'
+                + '<td class="num">' + fmt(s.roi, 1) + '%</td>'
+                + '<td class="num">' + fmtCurrency(s.buy_box_price) + '</td>'
+                + '<td class="num">' + fmtInt(s.bsr) + '</td>'
+                + '<td>' + (s.restricted ? '<span class="restricted-yes">Restricted</span>' : '<span class="restricted-no">Approved</span>') + '</td>'
+                + '</tr>';
+            });
+            html += '</tbody></table>';
+          } else {
+            html += '<p style="color:var(--text-muted);padding:8px 0;">No ASIN snapshots in this run.</p>';
+          }
+        } catch (e) {
+          html += '<p style="color:var(--red);padding:8px 0;">Error loading ASIN results: ' + esc(e.message) + '</p>';
+        }
+
+        html += '</div>'; // /asin-results-section
+      }
+
       container.innerHTML = html;
     } catch (e) {
-      container.innerHTML = '<p style="color:var(--red);padding:12px;">Error loading run detail: ' + esc(e.message) + '</p>';
+      container.innerHTML = '<div class="timeline-error">Error loading run detail: ' + esc(e.message) + '</div>';
     }
   }
 
@@ -1429,7 +1761,7 @@
   $('#runs-tbody').addEventListener('click', function (e) {
     var row = e.target.closest('tr.run-row');
     if (!row) return;
-    var runId = parseInt(row.getAttribute('data-run-id'), 10);
+    var runId = row.getAttribute('data-run-id');
     if (expandedRunId === runId) {
       expandedRunId = null;
     } else {
@@ -1438,12 +1770,22 @@
     renderRuns();
   });
 
-  // Auto-refresh for runs tab
-  function startRunsAutoRefresh() {
+  // Auto-refresh for runs tab (5s if running, 30s otherwise)
+  function adjustRefreshInterval() {
+    var desiredInterval = hasRunningRuns ? 5000 : 30000;
+    if (runsRefreshInterval && runsRefreshIntervalMs === desiredInterval) return;
     stopRunsAutoRefresh();
+    startRunsAutoRefresh(desiredInterval);
+  }
+
+  var runsRefreshIntervalMs = 30000;
+
+  function startRunsAutoRefresh(intervalMs) {
+    stopRunsAutoRefresh();
+    runsRefreshIntervalMs = intervalMs || 30000;
     runsRefreshInterval = setInterval(function () {
       if (activeTab === 'runs') loadRuns();
-    }, 30000);
+    }, runsRefreshIntervalMs);
   }
 
   function stopRunsAutoRefresh() {

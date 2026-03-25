@@ -76,6 +76,7 @@ router.use("/api/products", authMiddleware);
 router.use("/api/runs", authMiddleware);
 router.use("/api/stats", authMiddleware);
 router.use("/api/product", authMiddleware);
+router.use("/api/inngest-query", authMiddleware);
 router.use("/api/run", authMiddleware);
 
 // ---------- Dashboard ----------
@@ -166,6 +167,36 @@ router.get("/api/run/:id", async (req, res) => {
   const result = await queryDB(["export-run-detail", String(id)]);
   if (result.error) return res.status(500).json(result);
   res.json(result);
+});
+
+// ---------- API: Proxy to Inngest GraphQL (for run timeline data) ----------
+router.post("/api/inngest-query", async (req, res) => {
+  const http = require("http");
+  const inngestHost = process.env.INNGEST_HOST || "globalink-fba-inngest-server-1";
+
+  const payload = JSON.stringify(req.body);
+
+  const proxyReq = http.request({
+    hostname: inngestHost,
+    port: 8288,
+    path: "/v0/gql",
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+  }, (proxyRes) => {
+    let data = "";
+    proxyRes.on("data", (chunk) => { data += chunk; });
+    proxyRes.on("end", () => {
+      try { res.json(JSON.parse(data)); }
+      catch { res.status(502).json({ error: "Invalid response from Inngest" }); }
+    });
+  });
+
+  proxyReq.on("error", (err) => {
+    res.status(502).json({ error: `Inngest unavailable: ${err.message}` });
+  });
+
+  proxyReq.write(payload);
+  proxyReq.end();
 });
 
 module.exports = router;
