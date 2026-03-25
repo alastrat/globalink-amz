@@ -2026,13 +2026,12 @@
     }
   }
 
-  // Run row click -> toggle expand
-  $('#runs-tbody').addEventListener('click', function (e) {
+  // Run row click -> toggle expand (use document delegation for reliability)
+  document.addEventListener('click', function (e) {
     // Handle timeline bar clicks (step detail)
     var bar = e.target.closest('.timeline-bar[data-step-idx]');
-    if (bar) {
+    if (bar && bar.closest('#runs-tbody')) {
       e.stopPropagation();
-      var runRow = bar.closest('.run-detail-content');
       var runDetailRow = bar.closest('tr.run-detail-row');
       var runId = runDetailRow ? runDetailRow.getAttribute('data-run-detail') : null;
       if (!runId) return;
@@ -2048,16 +2047,17 @@
     }
 
     var row = e.target.closest('tr.run-row');
-    if (!row) return;
-    var runId = row.getAttribute('data-run-id');
-    if (expandedRunId === runId) {
-      expandedRunId = null;
-      selectedStepKey = null; // Clear step selection when collapsing
-    } else {
-      expandedRunId = runId;
-      selectedStepKey = null; // Clear step selection when switching runs
+    if (row && row.closest('#runs-tbody')) {
+      var runId = row.getAttribute('data-run-id');
+      if (expandedRunId === runId) {
+        expandedRunId = null;
+        selectedStepKey = null;
+      } else {
+        expandedRunId = runId;
+        selectedStepKey = null;
+      }
+      renderRuns();
     }
-    renderRuns();
   });
 
   // Auto-refresh for runs tab (5s if running, 30s otherwise)
@@ -2074,7 +2074,7 @@
     stopRunsAutoRefresh();
     runsRefreshIntervalMs = intervalMs || 30000;
     runsRefreshInterval = setInterval(function () {
-      if (activeTab === 'runs') loadRuns();
+      if (activeTab === 'runs' && !selectedStepKey) loadRuns();
     }, runsRefreshIntervalMs);
   }
 
