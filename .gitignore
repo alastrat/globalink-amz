@@ -36,3 +36,7 @@ store/
 
 # Worktrees
 .worktrees/
+
+# Client-specific tfvars (contain secrets)
+terraform/clients/*.tfvars
+!terraform/clients/example.tfvars
