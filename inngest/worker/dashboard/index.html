@@ -868,6 +868,47 @@
       width: 18px; height: 18px; line-height: 18px; font-size: 10px;
     }
 
+    /* ---- Conversations Tab ---- */
+    .conv-layout { display: flex; gap: 0; height: calc(100vh - 200px); }
+    .conv-left { width: 30%; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .conv-left input { margin: 12px; padding: 8px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; }
+    .conv-left input:focus { outline: none; border-color: var(--accent); }
+    .conv-list { flex: 1; overflow-y: auto; }
+    .conv-item { padding: 12px; border-bottom: 1px solid #21262d; cursor: pointer; }
+    .conv-item:hover { background: #161b22; }
+    .conv-item.active { background: var(--card); border-left: 3px solid var(--accent); }
+    .conv-item-name { font-size: 14px; color: var(--text-bright); font-weight: 600; }
+    .conv-item-preview { font-size: 12px; color: var(--text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .conv-item-time { font-size: 11px; color: #484f58; float: right; }
+    .conv-item-count { font-size: 11px; color: #484f58; margin-left: 8px; font-family: var(--mono); }
+    .conv-count { padding: 8px 12px; font-size: 12px; color: #484f58; border-top: 1px solid var(--border); }
+
+    .conv-right { flex: 1; display: flex; flex-direction: column; }
+    .conv-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .conv-header-name { font-size: 16px; color: var(--text-bright); font-weight: 600; }
+    .conv-header-jid { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+    .conv-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .conv-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; color: #484f58; font-size: 14px; }
+
+    .msg { max-width: 75%; }
+    .msg-user { align-self: flex-start; }
+    .msg-bot { align-self: flex-end; }
+    .msg-bubble { padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+    .msg-user .msg-bubble { background: var(--card); color: var(--text); border-bottom-left-radius: 4px; }
+    .msg-bot .msg-bubble { background: #1f3a1f; color: var(--text); border-bottom-right-radius: 4px; }
+    .msg-meta { font-size: 11px; color: #484f58; margin-top: 2px; }
+    .msg-user .msg-meta { text-align: left; }
+    .msg-bot .msg-meta { text-align: right; }
+
+    .msg-run-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px; padding: 4px 10px; background: #161b22; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--link); }
+    .msg-run-link:hover { background: var(--card); border-color: var(--link); }
+    .msg-run-link .run-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .msg-run-link .run-dot.completed { background: var(--green); }
+    .msg-run-link .run-dot.failed { background: var(--red); }
+    .msg-run-link .run-dot.running { background: var(--blue); }
+
+    .conv-footer { padding: 8px 16px; border-top: 1px solid var(--border); }
+
     /* ---- Responsive ---- */
     @media (max-width: 768px) {
       .container { padding: 12px; }
@@ -884,6 +925,9 @@
       .run-detail-left { flex: 1 1 auto; max-width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
       .run-detail-right { flex: 1 1 auto; max-width: 100%; max-height: 400px; }
       .run-metadata { grid-template-columns: repeat(2, 1fr); }
+      .conv-layout { flex-direction: column; height: auto; }
+      .conv-left { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 40vh; }
+      .conv-right { min-height: 50vh; }
     }
 
     @media (max-width: 480px) {
@@ -940,6 +984,7 @@
       <div class="tab-nav">
         <button class="tab-btn active" data-tab="products">Products</button>
         <button class="tab-btn" data-tab="runs">Runs</button>
+        <button class="tab-btn" data-tab="conversations">Conversations</button>
       </div>
     </div>
     <div class="header-controls">
@@ -1085,6 +1130,20 @@
       </div>
     </div>
   </div><!-- /runs-tab -->
+
+  <!-- ========== Conversations Tab ========== -->
+  <div class="tab-content" id="conversations-tab">
+    <div class="conv-layout">
+      <div class="conv-left">
+        <input type="text" id="conv-search" placeholder="Search contacts...">
+        <div id="conv-list" class="conv-list"></div>
+        <div id="conv-count" class="conv-count"></div>
+      </div>
+      <div class="conv-right" id="conv-right">
+        <div class="conv-placeholder">Select a conversation</div>
+      </div>
+    </div>
+  </div><!-- /conversations-tab -->
 
 </div>
 
@@ -1748,6 +1807,10 @@
       startRunsAutoRefresh();
     } else {
       stopRunsAutoRefresh();
+    }
+
+    if (tab === 'conversations') {
+      loadChats();
     }
   }
 
@@ -2506,6 +2569,194 @@
     }
   });
 
+  // ---- Conversations Tab ----
+  var convChats = [];
+  var selectedChatJid = null;
+  var convMessages = [];
+  var convChatsLoaded = false;
+
+  async function loadChats() {
+    try {
+      var data = await apiFetch('/api/chats');
+      convChats = data.chats || [];
+      convChatsLoaded = true;
+      renderChatList();
+    } catch (e) {
+      console.error('Failed to load chats:', e);
+      showToast('Failed to load chats: ' + e.message);
+    }
+  }
+
+  function renderChatList() {
+    var searchEl = $('#conv-search');
+    var search = searchEl ? searchEl.value : '';
+    var filtered = convChats.filter(function (c) {
+      if (!search) return true;
+      var s = search.toLowerCase();
+      return (c.name || '').toLowerCase().indexOf(s) >= 0 || (c.jid || '').indexOf(s) >= 0;
+    });
+
+    var html = '';
+    filtered.forEach(function (c) {
+      var isActive = selectedChatJid === c.jid;
+      var name = c.name || c.jid.split('@')[0];
+      var time = c.last_message_time ? fmtRunTimestamp(c.last_message_time) : '';
+      var preview = c.last_message_preview || '';
+      if (preview.length > 50) preview = preview.slice(0, 50) + '...';
+      var count = c.message_count || 0;
+
+      html += '<div class="conv-item' + (isActive ? ' active' : '') + '" data-jid="' + esc(c.jid) + '">';
+      html += '<span class="conv-item-time">' + esc(time) + '</span>';
+      html += '<div class="conv-item-name">' + esc(name);
+      if (count > 0) html += '<span class="conv-item-count">(' + count + ')</span>';
+      html += '</div>';
+      html += '<div class="conv-item-preview">' + esc(preview) + '</div>';
+      html += '</div>';
+    });
+
+    $('#conv-list').innerHTML = html;
+    $('#conv-count').textContent = filtered.length + ' conversation' + (filtered.length !== 1 ? 's' : '');
+  }
+
+  // Search filter
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.id === 'conv-search') {
+      renderChatList();
+    }
+  });
+
+  // Chat item click
+  document.addEventListener('click', function (e) {
+    var item = e.target.closest('.conv-item[data-jid]');
+    if (item) {
+      selectedChatJid = item.getAttribute('data-jid');
+      renderChatList();
+      loadChatMessages(selectedChatJid);
+    }
+  });
+
+  async function loadChatMessages(jid) {
+    var right = $('#conv-right');
+    var chat = convChats.find(function (c) { return c.jid === jid; });
+    var name = chat ? (chat.name || jid.split('@')[0]) : jid.split('@')[0];
+
+    right.innerHTML = '<div class="conv-placeholder">Loading messages...</div>';
+
+    try {
+      var data = await apiFetch('/api/chat/' + encodeURIComponent(jid) + '/messages?limit=200');
+      convMessages = data.messages || [];
+
+      var html = '<div class="conv-header">';
+      html += '<div class="conv-header-name">' + esc(name) + '</div>';
+      html += '<div class="conv-header-jid">' + esc(jid) + '</div>';
+      html += '</div>';
+      html += '<div class="conv-messages">';
+
+      var lastDate = '';
+      convMessages.forEach(function (msg) {
+        // Date separator
+        if (msg.timestamp) {
+          var msgDate = new Date(msg.timestamp).toLocaleDateString();
+          if (msgDate !== lastDate) {
+            html += '<div style="text-align:center;font-size:11px;color:#484f58;margin:12px 0 4px;">' + esc(msgDate) + '</div>';
+            lastDate = msgDate;
+          }
+        }
+
+        var isBot = msg.is_from_me || msg.is_bot_message;
+        var cls = isBot ? 'msg-bot' : 'msg-user';
+        var sender = isBot ? 'FBA Bot' : (msg.sender_name || msg.sender || '');
+        var time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+        html += '<div class="msg ' + cls + '">';
+
+        // Run link above the message bubble
+        if (isBot && msg.content && /investigaci[oó]n iniciada|research.*started|checking restrictions|verificando restricciones/i.test(msg.content)) {
+          var matchedRun = findRunByTimestamp(msg.timestamp);
+          if (matchedRun) {
+            var runStatus = (matchedRun.status || '').toLowerCase();
+            html += '<div class="msg-run-link" data-run-id="' + esc(matchedRun.id) + '">';
+            html += '<span class="run-dot ' + runStatus + '"></span>';
+            var funcName = matchedRun.function ? matchedRun.function.name : 'run';
+            html += esc(funcName.replace('fba/', ''));
+            var dur = calcDuration(matchedRun);
+            if (dur != null) html += ' &middot; ' + fmtDuration(dur);
+            html += ' &rarr;';
+            html += '</div>';
+          }
+        }
+
+        html += '<div class="msg-bubble">' + esc(msg.content || '') + '</div>';
+        html += '<div class="msg-meta">' + esc(sender) + ' &middot; ' + esc(time) + '</div>';
+        html += '</div>';
+      });
+
+      html += '</div>';
+      html += '<div class="conv-footer"><button class="step-export-btn" id="conv-export-btn">Export Chat</button></div>';
+
+      right.innerHTML = html;
+
+      // Scroll to bottom
+      var messagesDiv = right.querySelector('.conv-messages');
+      if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    } catch (e) {
+      right.innerHTML = '<div class="conv-placeholder">Error loading messages: ' + esc(e.message) + '</div>';
+    }
+  }
+
+  function findRunByTimestamp(msgTimestamp) {
+    if (!msgTimestamp || !inngestRuns.length) return null;
+    var msgTime = new Date(msgTimestamp).getTime();
+    var best = null;
+    var bestDiff = 15000; // 15 second window
+    inngestRuns.forEach(function (r) {
+      if (!r.startedAt) return;
+      var runTime = new Date(r.startedAt).getTime();
+      var diff = Math.abs(runTime - msgTime);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = r;
+      }
+    });
+    return best;
+  }
+
+  // Run link click -> switch to Runs tab and expand that run
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('.msg-run-link[data-run-id]');
+    if (link) {
+      var runId = link.getAttribute('data-run-id');
+      expandedRunId = runId;
+      switchTab('runs');
+    }
+  });
+
+  // Export chat button
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'conv-export-btn') {
+      exportChat();
+    }
+  });
+
+  function exportChat() {
+    if (!convMessages.length) return;
+    var chat = convChats.find(function (c) { return c.jid === selectedChatJid; });
+    var chatName = chat ? (chat.name || selectedChatJid) : selectedChatJid;
+    var text = convMessages.map(function (m) {
+      var who = (m.is_from_me || m.is_bot_message) ? 'FBA Bot' : (m.sender_name || m.sender || 'User');
+      var time = m.timestamp || '';
+      return '[' + time + '] ' + who + ': ' + (m.content || '');
+    }).join('\n');
+    var blob = new Blob([text], { type: 'text/plain' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'chat-' + chatName.replace(/[^a-zA-Z0-9]/g, '-') + '.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Auto-refresh for runs tab (5s if running, 30s otherwise)
   // Pauses when a step detail panel is open
   function adjustRefreshInterval() {
@@ -2536,7 +2787,7 @@
   // ---- URL hash routing ----
   function handleHash() {
     var hash = window.location.hash.replace('#', '');
-    if (hash === 'runs' || hash === 'products') {
+    if (hash === 'runs' || hash === 'products' || hash === 'conversations') {
       switchTab(hash);
     }
   }
@@ -2544,10 +2795,13 @@
 
   // ---- Initial load ----
   loadData();
+  // Pre-load inngest runs data for conversation run-linking
+  loadRuns();
 
   // Check URL hash for initial tab
-  if (window.location.hash === '#runs') {
-    switchTab('runs');
+  var initialHash = window.location.hash.replace('#', '');
+  if (initialHash === 'runs' || initialHash === 'conversations') {
+    switchTab(initialHash);
   }
 
 })();

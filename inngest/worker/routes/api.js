@@ -13,12 +13,12 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const GRADE_RE = /^[A-F]$/;
 const RESTRICTED_RE = /^[01]$/;
 
-// ---------- Async DB query helper (non-blocking) ----------
-function queryDB(args, timeout = 10000) {
+// ---------- Async tool query helper (non-blocking) ----------
+function queryTool(script, args, timeout = 10000) {
   return new Promise((resolve) => {
     execFile(
       "python3",
-      [`${TOOLS_DIR}/research_db.py`, ...args],
+      [`${TOOLS_DIR}/${script}`, ...args],
       {
         encoding: "utf-8",
         timeout,
@@ -41,6 +41,10 @@ function queryDB(args, timeout = 10000) {
       }
     );
   });
+}
+
+function queryDB(args, timeout) {
+  return queryTool("research_db.py", args, timeout);
 }
 
 // ---------- HTTP Basic Auth middleware ----------
@@ -78,6 +82,8 @@ router.use("/api/stats", authMiddleware);
 router.use("/api/product", authMiddleware);
 router.use("/api/inngest-query", authMiddleware);
 router.use("/api/run", authMiddleware);
+router.use("/api/chats", authMiddleware);
+router.use("/api/chat", authMiddleware);
 
 // ---------- Dashboard ----------
 router.get("/dashboard", (_req, res) => {
@@ -165,6 +171,32 @@ router.get("/api/run/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id) || id < 1) return res.status(400).json({ error: "Invalid run ID" });
   const result = await queryDB(["export-run-detail", String(id)]);
+  if (result.error) return res.status(500).json(result);
+  res.json(result);
+});
+
+// ---------- API: List chat conversations ----------
+router.get("/api/chats", async (req, res) => {
+  const result = await queryTool("messages_db.py", ["list-chats"], 10000);
+  if (result.error) return res.status(500).json(result);
+  res.json(result);
+});
+
+// ---------- API: Get messages for a chat ----------
+router.get("/api/chat/:jid/messages", async (req, res) => {
+  const jid = req.params.jid;
+  if (!/^\d+@[sg]\.(whatsapp\.net|us)$/.test(jid)) {
+    return res.status(400).json({ error: "Invalid chat JID" });
+  }
+  const args = ["get-messages", jid];
+  if (req.query.limit) {
+    const n = parseInt(req.query.limit, 10);
+    if (!isNaN(n) && n >= 1 && n <= 500) args.push("--limit", String(n));
+  }
+  if (req.query.before) {
+    args.push("--before", String(req.query.before));
+  }
+  const result = await queryTool("messages_db.py", args, 10000);
   if (result.error) return res.status(500).json(result);
   res.json(result);
 });
