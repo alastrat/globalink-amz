@@ -22,3 +22,18 @@ output "droplet_id" {
 #   description = "Spaces endpoint URL"
 #   value       = digitalocean_spaces_bucket.backups.bucket_domain_name
 # }
+
+output "client_dashboard_url" {
+  description = "New client dashboard URL"
+  value       = var.provision_new_client ? module.client[0].dashboard_url : null
+}
+
+output "client_ssh_command" {
+  description = "SSH to new client droplet"
+  value       = var.provision_new_client ? module.client[0].ssh_command : null
+}
+
+output "client_reserved_ip" {
+  description = "New client reserved IP"
+  value       = var.provision_new_client ? module.client[0].reserved_ip : null
+}

@@ -120,3 +120,33 @@ resource "digitalocean_monitor_alert" "memory" {
   entities    = [digitalocean_droplet.fba.id]
   description = "FBA droplet memory > 90% for 5 min"
 }
+
+# --- Multi-tenant client provisioning ---
+module "client" {
+  source = "./modules/fba-client"
+  count  = var.provision_new_client ? 1 : 0
+
+  client_name              = var.client_name
+  do_token                 = var.do_token
+  ssh_public_key           = var.deploy_ssh_public_key
+  alert_email              = var.alert_email
+  droplet_region           = var.droplet_region
+  droplet_size             = var.droplet_size
+  whatsapp_number          = var.whatsapp_number
+  owner_whatsapp           = var.owner_whatsapp
+  assistant_name           = var.assistant_name
+  timezone                 = var.timezone
+  claude_oauth_token       = var.claude_oauth_token
+  claude_refresh_token     = var.claude_refresh_token
+  sp_api_refresh_token     = var.sp_api_refresh_token
+  sp_api_lwa_app_id        = var.sp_api_lwa_app_id
+  sp_api_lwa_client_secret = var.sp_api_lwa_client_secret
+  amazon_seller_id         = var.amazon_seller_id
+  amazon_marketplace_id    = var.amazon_marketplace_id
+  dashboard_user           = var.dashboard_user
+  dashboard_pass           = var.dashboard_pass
+  ghcr_token               = var.ghcr_token
+  ghcr_user                = var.ghcr_user
+  firecrawl_api_key        = var.firecrawl_api_key
+  exa_api_key              = var.exa_api_key
+}
