@@ -417,7 +417,7 @@
     .run-row.expanded { background: rgba(99,102,241,0.04); }
     .run-detail-row td { padding: 0; border-top: none; }
     .run-detail-content {
-      padding: 12px 14px 16px;
+      padding: 0;
       background: var(--bg);
       border-top: 1px solid var(--border);
     }
@@ -425,6 +425,211 @@
     .run-detail-content thead { background: var(--card); }
     .run-detail-content td { font-size: 12px; padding: 6px 10px; }
     .run-detail-content th { font-size: 10px; padding: 8px 10px; }
+
+    /* ---- Two-panel layout for expanded runs ---- */
+    .run-detail-layout {
+      display: flex;
+      gap: 0;
+      min-height: 340px;
+    }
+    .run-detail-left {
+      flex: 0 0 60%;
+      max-width: 60%;
+      padding: 16px;
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      max-height: 600px;
+    }
+    .run-detail-right {
+      flex: 0 0 40%;
+      max-width: 40%;
+      background: #161b22;
+      overflow-y: auto;
+      max-height: 600px;
+    }
+    .run-detail-right-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      min-height: 340px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-style: italic;
+    }
+
+    /* ---- Run metadata grid ---- */
+    .run-metadata {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .run-meta-item {}
+    .run-meta-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .run-meta-value {
+      font-size: 13px;
+      color: var(--text-bright);
+      font-family: var(--mono);
+      word-break: break-all;
+    }
+
+    /* ---- Step detail right panel ---- */
+    .step-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .step-panel-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .step-panel-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-bright);
+      font-family: var(--mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .step-panel-chevron {
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+    .step-panel-chevron.open { transform: rotate(90deg); }
+
+    /* ---- Underline tabs ---- */
+    .step-panel-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .step-panel-tab {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--sans);
+      transition: all 0.15s;
+    }
+    .step-panel-tab:hover { color: var(--text); }
+    .step-panel-tab.active {
+      color: var(--text-bright);
+      border-bottom-color: var(--text-bright);
+    }
+
+    /* ---- Code viewer (Inngest style) ---- */
+    .code-viewer {
+      margin: 0;
+      background: #0d1117;
+      border-radius: 8px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      background: #0d1117;
+      border-bottom: 1px solid #30363d;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .code-label {
+      font-weight: 600;
+    }
+    .code-copy-btn {
+      background: #30363d;
+      border: 1px solid #484f58;
+      color: #c9d1d9;
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .code-copy-btn:hover { background: #484f58; }
+    .code-copy-btn.copied { background: var(--green); color: #fff; border-color: var(--green); }
+    .code-body {
+      background: #0d1117;
+      overflow-y: auto;
+      padding: 16px;
+      scrollbar-width: thin;
+    }
+    .code-lines {
+      border-collapse: collapse;
+      width: 100%;
+      background: transparent;
+    }
+    .code-lines tr:hover { background: rgba(99,102,241,0.06); }
+    .code-lines td { border: none; padding: 0; font-size: 14px; line-height: 1.6; }
+    .code-lines .line-num {
+      min-width: 40px;
+      padding-right: 16px;
+      text-align: right;
+      color: #484f58;
+      font-family: var(--mono);
+      font-size: 14px;
+      user-select: none;
+      vertical-align: top;
+    }
+    .code-lines .line-code {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--text);
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .hl-key { color: #d2a8ff; }
+    .hl-string { color: #7ee787; }
+    .hl-number { color: #f0c674; }
+    .hl-bool { color: #f0c674; }
+
+    .step-panel-spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      padding: 40px 16px;
+    }
+    .step-panel-spinner .mini-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .step-panel-error {
+      padding: 16px;
+      color: var(--red);
+      font-size: 13px;
+      font-family: var(--mono);
+    }
 
     .expand-arrow {
       display: inline-block;
@@ -534,6 +739,8 @@
       align-items: center;
       justify-content: flex-end;
       padding-right: 6px;
+      cursor: pointer;
+      transition: box-shadow 0.15s, filter 0.15s;
     }
     .timeline-bar.completed { background: var(--green); }
     .timeline-bar.failed { background: var(--red); }
@@ -558,10 +765,6 @@
       font-family: var(--mono);
       text-align: left;
     }
-    .timeline-bar {
-      cursor: pointer;
-      transition: box-shadow 0.15s, filter 0.15s;
-    }
     .timeline-bar:hover {
       filter: brightness(1.2);
       box-shadow: 0 0 6px rgba(255,255,255,0.15);
@@ -570,99 +773,6 @@
       box-shadow: 0 0 0 2px var(--text-bright), 0 0 12px rgba(99,102,241,0.4);
       filter: brightness(1.3);
       z-index: 1;
-    }
-    .step-detail-panel {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 16px;
-      margin-top: 12px;
-    }
-    .step-detail-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-    .step-detail-header .step-detail-name {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text-bright);
-      font-family: var(--mono);
-    }
-    .step-detail-header .step-detail-duration {
-      font-size: 12px;
-      color: var(--text-muted);
-      font-family: var(--mono);
-    }
-    .step-detail-tabs {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 12px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 8px;
-    }
-    .step-detail-tab {
-      background: transparent;
-      color: var(--text-muted);
-      border: 1px solid transparent;
-      padding: 4px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      font-family: var(--sans);
-      transition: all 0.15s;
-    }
-    .step-detail-tab:hover { color: var(--text); background: rgba(99,102,241,0.08); }
-    .step-detail-tab.active {
-      color: var(--text-bright);
-      background: var(--card);
-      border-color: var(--border);
-    }
-    .step-detail-body {
-      max-height: 300px;
-      overflow: auto;
-      scrollbar-width: thin;
-    }
-    .step-detail-body pre {
-      font-family: var(--mono);
-      font-size: 12px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-      margin: 0;
-      color: var(--text);
-    }
-    .step-detail-body .json-key { color: #f0f6fc; }
-    .step-detail-body .json-string { color: #7ee787; }
-    .step-detail-body .json-number { color: #79c0ff; }
-    .step-detail-body .json-bool,
-    .step-detail-body .json-null { color: #d29922; }
-    .step-detail-error pre {
-      color: var(--red);
-      font-family: var(--mono);
-      font-size: 12px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-      margin: 0;
-    }
-    .step-detail-spinner {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--text-muted);
-      font-size: 13px;
-      padding: 12px 0;
-    }
-    .step-detail-spinner .mini-spinner {
-      width: 16px; height: 16px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
     }
     .timeline-empty {
       padding: 16px;
@@ -693,6 +803,10 @@
       .filter-bar { flex-direction: column; }
       .filter-group { min-width: 100%; }
       .modal { padding: 16px; }
+      .run-detail-layout { flex-direction: column; }
+      .run-detail-left { flex: 1 1 auto; max-width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+      .run-detail-right { flex: 1 1 auto; max-width: 100%; max-height: 400px; }
+      .run-metadata { grid-template-columns: repeat(2, 1fr); }
     }
 
     @media (max-width: 480px) {
@@ -1719,8 +1833,18 @@
         + '</tr>';
 
       if (isExpanded) {
+        // Use data attributes instead of embedding raw IDs in element IDs
         html += '<tr class="run-detail-row" data-run-detail="' + esc(r.id) + '">'
-          + '<td colspan="5"><div class="run-detail-content" id="run-detail-' + esc(r.id) + '">Loading...</div></td>'
+          + '<td colspan="5">'
+          + '<div class="run-detail-content">'
+          + '<div class="run-detail-layout">'
+          + '<div class="run-detail-left" data-detail-left="' + esc(r.id) + '"><div class="step-panel-spinner"><div class="mini-spinner"></div>Loading run details...</div></div>'
+          + '<div class="run-detail-right" data-step-panel="' + esc(r.id) + '">'
+          + '<div class="run-detail-right-placeholder">Click a step to view details</div>'
+          + '</div>'
+          + '</div>'
+          + '</div>'
+          + '</td>'
           + '</tr>';
       }
     });
@@ -1732,8 +1856,19 @@
     }
   }
 
+  // Helper to find panels using attribute selectors (handles special chars in IDs)
+  function findDetailLeft(runId) {
+    return document.querySelector('[data-detail-left="' + runId + '"]');
+  }
+  function findStepPanel(runId) {
+    return document.querySelector('[data-step-panel="' + runId + '"]');
+  }
+  function findStepContent(runId) {
+    return document.querySelector('[data-step-content="' + runId + '"]');
+  }
+
   async function loadRunDetail(runId) {
-    var container = $('#run-detail-' + CSS.escape(runId));
+    var container = findDetailLeft(runId);
     if (!container) return;
 
     try {
@@ -1743,21 +1878,35 @@
 
       var html = '';
 
-      // Step timeline section
-      html += '<div class="timeline-section">';
-      html += '<div class="timeline-section-title">Step Timeline</div>';
-
+      // Run metadata section
       if (traceResult.data && traceResult.data.runTrace) {
         var trace = traceResult.data.runTrace;
+        var funcNameFull = trace.name || 'Unknown';
+        var inngestRun = inngestRuns.find(function (r) { return r.id === runId; });
+        var funcDisplay = inngestRun && inngestRun.function ? inngestRun.function.name : funcNameFull;
+        var runDuration = trace.duration || 0;
+
+        html += '<div class="run-metadata">';
+        html += '<div class="run-meta-item"><div class="run-meta-label">Run ID</div><div class="run-meta-value">' + esc(runId.slice(0, 16)) + '...</div></div>';
+        html += '<div class="run-meta-item"><div class="run-meta-label">App</div><div class="run-meta-value">fba-worker</div></div>';
+        html += '<div class="run-meta-item"><div class="run-meta-label">Function</div><div class="run-meta-value">' + esc(funcDisplay) + '</div></div>';
+        html += '<div class="run-meta-item"><div class="run-meta-label">Duration</div><div class="run-meta-value">' + fmtDuration(runDuration) + '</div></div>';
+        html += '<div class="run-meta-item"><div class="run-meta-label">Queued at</div><div class="run-meta-value">' + esc(fmtRunTimestamp(trace.queuedAt)) + '</div></div>';
+        html += '<div class="run-meta-item"><div class="run-meta-label">Started at</div><div class="run-meta-value">' + esc(fmtRunTimestamp(trace.startedAt)) + '</div></div>';
+        html += '<div class="run-meta-item"><div class="run-meta-label">Ended at</div><div class="run-meta-value">' + esc(fmtRunTimestamp(trace.endedAt)) + '</div></div>';
+        html += '</div>';
+
+        // Trace section
         var steps = trace.childrenSpans || [];
 
         if (steps.length === 0 && trace.isRoot) {
-          // Single-step function — show the root as the only step
-          steps = [{ name: trace.name, status: trace.status, duration: trace.duration, startedAt: trace.startedAt, endedAt: trace.endedAt, stepID: trace.stepID }];
+          steps = [{ name: trace.name, status: trace.status, duration: trace.duration, startedAt: trace.startedAt, endedAt: trace.endedAt, stepID: trace.stepID, outputID: trace.outputID }];
         }
 
+        html += '<div class="timeline-section">';
+        html += '<div class="timeline-section-title">Trace</div>';
+
         if (steps.length > 0) {
-          // Calculate timeline scale
           var runStart = new Date(trace.startedAt || trace.queuedAt).getTime();
           var runEnd = trace.endedAt ? new Date(trace.endedAt).getTime() : Date.now();
           var totalDuration = runEnd - runStart;
@@ -1790,7 +1939,7 @@
             var widthPct = (stepDuration / totalDuration) * 100;
             if (offsetPct < 0) offsetPct = 0;
             if (offsetPct > 100) offsetPct = 100;
-            if (widthPct < 0.5) widthPct = 0.5; // min visible width
+            if (widthPct < 0.5) widthPct = 0.5;
             if (offsetPct + widthPct > 100) widthPct = 100 - offsetPct;
 
             var statusLower = (step.status || '').toLowerCase();
@@ -1804,6 +1953,7 @@
               + ' data-step-name="' + esc(step.name || step.stepID || 'step') + '"'
               + ' data-step-status="' + esc(statusLower) + '"'
               + ' data-step-duration="' + stepDuration + '"'
+              + ' data-run-id="' + esc(runId) + '"'
               + (step.outputID ? ' data-output-id="' + esc(step.outputID) + '"' : '');
 
             html += '<div class="timeline-row">';
@@ -1814,37 +1964,37 @@
             html += '<span class="timeline-duration-label">' + fmtDurationShort(stepDuration) + '</span>';
             html += '</div>';
           });
-
-          // Step detail panel placeholder (populated when a bar is clicked)
-          html += '<div id="step-detail-' + esc(runId) + '"></div>';
         } else {
           html += '<div class="timeline-empty">No steps recorded for this run.</div>';
         }
+
+        html += '</div>'; // /timeline-section
+
+        container.innerHTML = html;
       } else {
         html += '<div class="timeline-error">Could not load step timeline from Inngest.</div>';
+        container.innerHTML = html;
       }
 
-      html += '</div>'; // /timeline-section
-
-      // ASIN results section — match by timestamp proximity
-      var inngestRun = inngestRuns.find(function (r) { return r.id === runId; });
-      var dbRun = inngestRun ? matchDbRun(inngestRun) : null;
+      // ASIN results section (appended after main content)
+      var inngestRun2 = inngestRuns.find(function (r) { return r.id === runId; });
+      var dbRun = inngestRun2 ? matchDbRun(inngestRun2) : null;
 
       if (dbRun) {
-        html += '<div class="asin-results-section">';
-        html += '<div class="timeline-section-title">ASIN Results (Run #' + dbRun.id + ')</div>';
+        var asinHtml = '<div class="asin-results-section">';
+        asinHtml += '<div class="timeline-section-title">ASIN Results (Run #' + dbRun.id + ')</div>';
 
         try {
           var detailData = await apiFetch('/api/run/' + dbRun.id);
           var snaps = detailData.snapshots || [];
 
           if (snaps.length > 0) {
-            html += '<table style="width:100%"><thead><tr>'
+            asinHtml += '<table style="width:100%"><thead><tr>'
               + '<th>ASIN</th><th>Title</th><th>Grade</th><th>Score</th>'
               + '<th>ROI%</th><th>Price</th><th>BSR</th><th>Restricted</th>'
               + '</tr></thead><tbody>';
             snaps.forEach(function (s) {
-              html += '<tr>'
+              asinHtml += '<tr>'
                 + '<td><a class="asin-link" href="https://www.amazon.com/dp/' + esc(s.asin) + '" target="_blank" rel="noopener">' + esc(s.asin) + '</a></td>'
                 + '<td class="title-cell" title="' + esc(s.title || '') + '">' + esc(truncate(s.title, 35)) + '</td>'
                 + '<td><span class="grade-badge ' + gradeClass(s.grade) + '">' + esc(s.grade || '-') + '</span></td>'
@@ -1855,18 +2005,17 @@
                 + '<td>' + (s.restricted ? '<span class="restricted-yes">Restricted</span>' : '<span class="restricted-no">Approved</span>') + '</td>'
                 + '</tr>';
             });
-            html += '</tbody></table>';
+            asinHtml += '</tbody></table>';
           } else {
-            html += '<p style="color:var(--text-muted);padding:8px 0;">No ASIN snapshots in this run.</p>';
+            asinHtml += '<p style="color:var(--text-muted);padding:8px 0;">No ASIN snapshots in this run.</p>';
           }
         } catch (e) {
-          html += '<p style="color:var(--red);padding:8px 0;">Error loading ASIN results: ' + esc(e.message) + '</p>';
+          asinHtml += '<p style="color:var(--red);padding:8px 0;">Error loading ASIN results: ' + esc(e.message) + '</p>';
         }
 
-        html += '</div>'; // /asin-results-section
+        asinHtml += '</div>';
+        container.insertAdjacentHTML('beforeend', asinHtml);
       }
-
-      container.innerHTML = html;
     } catch (e) {
       container.innerHTML = '<div class="timeline-error">Error loading run detail: ' + esc(e.message) + '</div>';
     }
@@ -1875,35 +2024,80 @@
   // ---- Step detail panel ----
   var selectedStepKey = null; // "runId:stepIdx"
 
-  function syntaxHighlightJSON(jsonStr) {
-    // Simple regex-based JSON syntax highlighting (no library)
-    return jsonStr
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/("(?:\\.|[^"\\])*"\s*:)/g, '<span class="json-key">$1</span>')
-      .replace(/:(\s*"(?:\\.|[^"\\])*")/g, ':<span class="json-string">$1</span>')
-      .replace(/:(\s*-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, ':<span class="json-number">$1</span>')
-      .replace(/:(\s*(?:true|false))/g, ':<span class="json-bool">$1</span>')
-      .replace(/:(\s*null)/g, ':<span class="json-null">$1</span>');
+  function syntaxHighlightLine(line) {
+    line = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Keys: "key": (before colon)
+    line = line.replace(/("(?:\\\\.|[^"\\\\])*")(\s*:)/g, '<span class="hl-key">$1</span>$2');
+    // String values: : "value" (after colon)
+    line = line.replace(/:(\s*)("(?:\\\\.|[^"\\\\])*")/g, ':$1<span class="hl-string">$2</span>');
+    // Standalone strings in arrays
+    line = line.replace(/(^\s*)"((?:\\\\.|[^"\\\\])*)"(\s*,?\s*$)/gm, '$1<span class="hl-string">"$2"</span>$3');
+    // Numbers after colon
+    line = line.replace(/:(\s*)(-?\d+\.?\d*)/g, ':$1<span class="hl-number">$2</span>');
+    // Booleans and null after colon
+    line = line.replace(/:(\s*)(true|false|null)/g, ':$1<span class="hl-bool">$2</span>');
+    return line;
+  }
+
+  var _copyData = {};
+  var _copyId = 0;
+
+  function buildCodeViewer(jsonStr, label, rawData) {
+    var id = 'cv-' + (++_copyId);
+    _copyData[id] = rawData;
+    var lines = jsonStr.split('\n');
+    var tableRows = '';
+    for (var i = 0; i < lines.length; i++) {
+      tableRows += '<tr><td class="line-num">' + (i + 1) + '</td><td class="line-code">' + syntaxHighlightLine(lines[i]) + '</td></tr>';
+    }
+    var html = '<div class="code-viewer">';
+    html += '<div class="code-header">';
+    html += '<span class="code-label">' + esc(label) + '</span>';
+    html += '<button class="code-copy-btn" data-copy-id="' + id + '">Copy</button>';
+    html += '</div>';
+    html += '<div class="code-body">';
+    html += '<table class="code-lines">' + tableRows + '</table>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  // Wire copy buttons inside a container element
+  function wireCopyButtons(container) {
+    container.querySelectorAll('.code-copy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var copyId = btn.getAttribute('data-copy-id');
+        var text = _copyData[copyId] || '';
+        navigator.clipboard.writeText(text).then(function () {
+          btn.textContent = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(function () {
+            btn.textContent = 'Copy';
+            btn.classList.remove('copied');
+          }, 2000);
+        });
+      });
+    });
   }
 
   function renderStepDetailPanel(runId, stepIdx, stepName, stepStatus, stepDurationMs, outputID) {
-    var container = document.getElementById('step-detail-' + CSS.escape(runId));
-    if (!container) return;
+    var panel = findStepPanel(runId);
+    if (!panel) {
+      console.log('[step-panel] Panel not found for runId:', runId);
+      return;
+    }
 
     var key = runId + ':' + stepIdx;
 
     // Toggle: clicking the same bar closes the panel
     if (selectedStepKey === key) {
       selectedStepKey = null;
-      container.innerHTML = '';
-      // Remove .selected from all bars in this run
-      var runDetail = document.getElementById('run-detail-' + CSS.escape(runId));
-      if (runDetail) {
-        runDetail.querySelectorAll('.timeline-bar.selected').forEach(function (b) {
-          b.classList.remove('selected');
-        });
+      panel.innerHTML = '<div class="run-detail-right-placeholder">Click a step to view details</div>';
+      // Remove .selected from all bars
+      var leftPanel = findDetailLeft(runId);
+      if (leftPanel) {
+        leftPanel.querySelectorAll('.timeline-bar.selected').forEach(function (b) { b.classList.remove('selected'); });
       }
       return;
     }
@@ -1911,41 +2105,66 @@
     selectedStepKey = key;
 
     // Highlight the selected bar, remove from others
-    var runDetail = document.getElementById('run-detail-' + CSS.escape(runId));
-    if (runDetail) {
-      runDetail.querySelectorAll('.timeline-bar.selected').forEach(function (b) {
-        b.classList.remove('selected');
-      });
-      var activeBar = runDetail.querySelector('.timeline-bar[data-step-idx="' + stepIdx + '"]');
+    var leftPanel = findDetailLeft(runId);
+    if (leftPanel) {
+      leftPanel.querySelectorAll('.timeline-bar.selected').forEach(function (b) { b.classList.remove('selected'); });
+      var activeBar = leftPanel.querySelector('.timeline-bar[data-step-idx="' + stepIdx + '"]');
       if (activeBar) activeBar.classList.add('selected');
     }
 
-    // Build panel header
-    var panelHtml = '<div class="step-detail-panel">';
-    panelHtml += '<div class="step-detail-header">';
-    panelHtml += '<span class="step-detail-name">' + esc(stepName) + '</span>';
+    // Build right panel content
+    var panelHtml = '';
+    panelHtml += '<div class="step-panel-header">';
+    panelHtml += '<div class="step-panel-header-left">';
+    panelHtml += '<span class="step-panel-chevron open">&#9656;</span>';
+    panelHtml += '<span class="step-panel-name">' + esc(stepName) + '</span>';
     panelHtml += '<span class="status-badge ' + statusClass(stepStatus) + '">' + esc(stepStatus) + '</span>';
-    panelHtml += '<span class="step-detail-duration">' + fmtDuration(Number(stepDurationMs)) + '</span>';
+    panelHtml += '</div>';
+    panelHtml += '<span style="font-size:12px;color:var(--text-muted);font-family:var(--mono);">' + fmtDuration(Number(stepDurationMs)) + '</span>';
     panelHtml += '</div>';
 
-    // Loading state
-    panelHtml += '<div class="step-detail-body">';
-    panelHtml += '<div class="step-detail-spinner"><div class="mini-spinner"></div>Loading step output...</div>';
-    panelHtml += '</div>';
+    // Tabs
+    panelHtml += '<div class="step-panel-tabs">';
+    panelHtml += '<button class="step-panel-tab active" data-panel-tab="output">Output</button>';
+    panelHtml += '<button class="step-panel-tab" data-panel-tab="input">Input</button>';
     panelHtml += '</div>';
 
-    container.innerHTML = panelHtml;
+    // Content area
+    panelHtml += '<div data-step-content="' + esc(runId) + '">';
+    panelHtml += '<div class="step-panel-spinner"><div class="mini-spinner"></div>Loading step output...</div>';
+    panelHtml += '</div>';
+
+    panel.innerHTML = panelHtml;
+
+    // Wire tab clicks
+    panel.querySelectorAll('.step-panel-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var targetTab = tab.getAttribute('data-panel-tab');
+        panel.querySelectorAll('.step-panel-tab').forEach(function (t) {
+          t.classList.toggle('active', t.getAttribute('data-panel-tab') === targetTab);
+        });
+        var contentEl = findStepContent(runId);
+        if (contentEl) {
+          contentEl.querySelectorAll('[data-panel-content]').forEach(function (c) {
+            c.style.display = c.getAttribute('data-panel-content') === targetTab ? '' : 'none';
+          });
+        }
+      });
+    });
 
     // Fetch output
     if (!outputID) {
-      container.querySelector('.step-detail-body').innerHTML = '<pre style="color:var(--text-muted);">No output data available for this step.</pre>';
+      var contentEl = findStepContent(runId);
+      if (contentEl) {
+        contentEl.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px;">No output data available for this step.</div>';
+      }
       return;
     }
 
-    fetchStepOutput(runId, stepIdx, outputID, container);
+    fetchStepOutput(runId, stepIdx, outputID);
   }
 
-  async function fetchStepOutput(runId, stepIdx, outputID, container) {
+  async function fetchStepOutput(runId, stepIdx, outputID) {
     var currentKey = runId + ':' + stepIdx;
     try {
       var query = '{ runTraceSpanOutputByID(outputID: "' + outputID + '") { data error { message name stack } } }';
@@ -1954,12 +2173,12 @@
       // Check if user clicked away while loading
       if (selectedStepKey !== currentKey) return;
 
-      var bodyEl = container.querySelector('.step-detail-body');
-      if (!bodyEl) return;
+      var contentEl = findStepContent(runId);
+      if (!contentEl) return;
 
       var output = result.data && result.data.runTraceSpanOutputByID;
       if (!output) {
-        bodyEl.innerHTML = '<pre style="color:var(--text-muted);">No output returned from Inngest.</pre>';
+        contentEl.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px;">No output returned from Inngest.</div>';
         return;
       }
 
@@ -1968,60 +2187,57 @@
 
       var html = '';
 
-      // Tabs (only show Error tab if error exists)
-      if (hasError) {
-        html += '<div class="step-detail-tabs">';
-        html += '<button class="step-detail-tab active" data-detail-tab="output">Output</button>';
-        html += '<button class="step-detail-tab" data-detail-tab="error">Error</button>';
-        html += '</div>';
-      }
-
       // Output content
-      html += '<div class="step-detail-tab-content" data-detail-content="output">';
+      html += '<div data-panel-content="output">';
       if (hasData) {
         var prettyJSON;
+        var rawData;
         try {
-          prettyJSON = JSON.stringify(JSON.parse(output.data), null, 2);
+          var parsed = JSON.parse(output.data);
+          prettyJSON = JSON.stringify(parsed, null, 2);
+          rawData = prettyJSON;
         } catch (e) {
           prettyJSON = output.data;
+          rawData = output.data;
         }
-        html += '<pre>' + syntaxHighlightJSON(prettyJSON) + '</pre>';
+        html += buildCodeViewer(prettyJSON, 'Step Output', rawData);
       } else {
-        html += '<pre style="color:var(--text-muted);">null</pre>';
+        html += buildCodeViewer('null', 'Step Output', 'null');
       }
       html += '</div>';
 
-      // Error content (hidden by default)
+      // Input tab content
+      html += '<div data-panel-content="input" style="display:none;">';
       if (hasError) {
-        html += '<div class="step-detail-tab-content step-detail-error" data-detail-content="error" style="display:none;">';
-        html += '<pre>';
-        if (output.error.name) html += esc(output.error.name) + ': ';
-        html += esc(output.error.message || 'Unknown error') + '\n';
-        if (output.error.stack) html += '\n' + esc(output.error.stack);
-        html += '</pre>';
-        html += '</div>';
+        var errorText = '';
+        if (output.error.name) errorText += output.error.name + ': ';
+        errorText += output.error.message || 'Unknown error';
+        if (output.error.stack) errorText += '\n\n' + output.error.stack;
+        html += buildCodeViewer(errorText, 'Error Details', errorText);
+      } else {
+        html += '<div style="padding:16px;color:var(--text-muted);font-size:13px;">Step input is not captured by Inngest trace API.</div>';
+      }
+      html += '</div>';
+
+      // If there's an error, update tab label
+      if (hasError) {
+        var panelEl = findStepPanel(runId);
+        if (panelEl) {
+          var inputTab = panelEl.querySelector('.step-panel-tab[data-panel-tab="input"]');
+          if (inputTab) inputTab.textContent = 'Error';
+        }
       }
 
-      bodyEl.innerHTML = html;
+      contentEl.innerHTML = html;
 
-      // Wire tab clicks
-      bodyEl.querySelectorAll('.step-detail-tab').forEach(function (tab) {
-        tab.addEventListener('click', function () {
-          var targetTab = tab.getAttribute('data-detail-tab');
-          bodyEl.querySelectorAll('.step-detail-tab').forEach(function (t) {
-            t.classList.toggle('active', t.getAttribute('data-detail-tab') === targetTab);
-          });
-          bodyEl.querySelectorAll('.step-detail-tab-content').forEach(function (c) {
-            c.style.display = c.getAttribute('data-detail-content') === targetTab ? '' : 'none';
-          });
-        });
-      });
+      // Wire copy buttons
+      wireCopyButtons(contentEl);
 
     } catch (e) {
       if (selectedStepKey !== currentKey) return;
-      var bodyEl = container.querySelector('.step-detail-body');
-      if (bodyEl) {
-        bodyEl.innerHTML = '<pre style="color:var(--red);">Error fetching step output: ' + esc(e.message) + '</pre>';
+      var contentEl = findStepContent(runId);
+      if (contentEl) {
+        contentEl.innerHTML = '<div class="step-panel-error">Error fetching step output: ' + esc(e.message) + '</div>';
       }
     }
   }
@@ -2032,8 +2248,11 @@
     var bar = e.target.closest('.timeline-bar[data-step-idx]');
     if (bar && bar.closest('#runs-tbody')) {
       e.stopPropagation();
-      var runDetailRow = bar.closest('tr.run-detail-row');
-      var runId = runDetailRow ? runDetailRow.getAttribute('data-run-detail') : null;
+      var runId = bar.getAttribute('data-run-id');
+      if (!runId) {
+        var runDetailRow = bar.closest('tr.run-detail-row');
+        runId = runDetailRow ? runDetailRow.getAttribute('data-run-detail') : null;
+      }
       if (!runId) return;
 
       var stepIdx = bar.getAttribute('data-step-idx');
@@ -2043,6 +2262,23 @@
       var outputID = bar.getAttribute('data-output-id');
 
       renderStepDetailPanel(runId, stepIdx, stepName, stepStatus, stepDuration, outputID);
+      return;
+    }
+
+    // Handle copy button clicks (bubbled up)
+    var copyBtn = e.target.closest('.code-copy-btn');
+    if (copyBtn) {
+      e.stopPropagation();
+      var copyId = copyBtn.getAttribute('data-copy-id');
+      var text = _copyData[copyId] || '';
+      navigator.clipboard.writeText(text).then(function () {
+        copyBtn.textContent = 'Copied!';
+        copyBtn.classList.add('copied');
+        setTimeout(function () {
+          copyBtn.textContent = 'Copy';
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      });
       return;
     }
 
@@ -2061,6 +2297,7 @@
   });
 
   // Auto-refresh for runs tab (5s if running, 30s otherwise)
+  // Pauses when a step detail panel is open
   function adjustRefreshInterval() {
     var desiredInterval = hasRunningRuns ? 5000 : 30000;
     if (runsRefreshInterval && runsRefreshIntervalMs === desiredInterval) return;
@@ -2074,6 +2311,7 @@
     stopRunsAutoRefresh();
     runsRefreshIntervalMs = intervalMs || 30000;
     runsRefreshInterval = setInterval(function () {
+      // Pause auto-refresh if step detail panel is open
       if (activeTab === 'runs' && !selectedStepKey) loadRuns();
     }, runsRefreshIntervalMs);
   }
