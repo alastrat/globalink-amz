@@ -45,8 +45,7 @@ def get_db():
     if not db_path.exists():
         yield None
         return
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    conn.execute("PRAGMA journal_mode=WAL")
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
