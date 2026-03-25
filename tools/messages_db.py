@@ -35,7 +35,7 @@ def load_env():
 
 load_env()
 
-DB_PATH = os.environ.get("MESSAGES_DB_PATH", "/data/messages.db")
+DB_PATH = os.environ.get("MESSAGES_DB_PATH", "/data/store/messages.db")
 
 
 @contextmanager
@@ -45,7 +45,7 @@ def get_db():
     if not db_path.exists():
         yield None
         return
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -100,7 +100,11 @@ def cmd_list_chats():
                 ) AS last_message_preview
             FROM chats c
             LEFT JOIN messages m ON m.chat_jid = c.jid
+            WHERE c.jid NOT LIKE '%group_sync%'
+              AND c.jid NOT LIKE '%status@%'
+              AND c.name NOT LIKE '%group_sync%'
             GROUP BY c.jid
+            HAVING message_count > 0
             ORDER BY c.last_message_time DESC
             """
         ).fetchall()

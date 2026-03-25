@@ -46,7 +46,7 @@ services:
       - /opt/nanoclaw/groups/owner/tools:/tools:ro
       - /opt/nanoclaw/data:/opt/nanoclaw/data
       - /opt/nanoclaw/groups/owner/cache:/cache
-      - /opt/nanoclaw/store/messages.db:/data/messages.db:ro
+      - /opt/nanoclaw/store:/data/store
     depends_on:
       - inngest-server
     networks:
