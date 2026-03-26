@@ -124,6 +124,7 @@ const researchProduct = inngest.createFunction(
     });
 
     if (asins.length === 0) {
+      sendProgress("[Research] No se encontraron productos para esta búsqueda. Intenta con términos más específicos (ej: 'kitchen gadgets under 20' o un ASIN como B07X6C9RMF).");
       return { products: 0, message: "No ASINs found" };
     }
 
